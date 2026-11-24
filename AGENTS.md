@@ -45,6 +45,7 @@ just test [crate]    # all tests, or one crate: just test termax-ssh
 just test-ssh        # SSH interop tests against a throwaway OpenSSH sshd
 just term-test       # both TermCore backends against shared expectations
 just spec-validate   # openspec validate --all --strict (pinned 1.17.0)
+just spec-coverage   # OpenSpec scenarios linked to tests; --phase P1, --run, --json FILE
 just perf            # perf harness; perf-baseline / perf-compare for local regression checks
 just ci              # lint + test + deny, as CI runs them (needs cargo-deny: just setup)
 just sshd            # throwaway sshd with a ready-to-paste ssh command
@@ -54,7 +55,7 @@ On Linux, building needs Zig 0.15.2 on `PATH`; the first Ghostty build clones Gh
 
 ## CI
 
-`.github/workflows/ci.yml`: `test` (fmt, clippy, tests on Linux x64/arm64, Windows x64/arm64, macOS), `spec` (OpenSpec strict validation), `deny` (licences, advisories), `perf` (regression gate against the PR's base commit).
+`.github/workflows/ci.yml`: `test` (fmt, clippy, tests on Linux x64/arm64, Windows x64/arm64, macOS), `spec` (OpenSpec strict validation), `deny` (licences, advisories), `perf` (regression gate against the PR's base commit), `coverage` (`cargo xtask spec-coverage --run`; report only, fails on dangling `Verifies:` tags).
 
 ## Links
 

@@ -20,11 +20,13 @@ Scope: tests in every crate (`src/**` unit tests, `crates/*/tests/`), the perf h
 7. MUST gate only stable metrics: parser throughput, snapshot cost, flood echo latency and the core memory estimate are gated; RSS, SSH loopback numbers and connect time are reported but not gated (allocator and runner noise).
 8. SHOULD state the verification for perf-sensitive changes in the PR (`just perf-baseline` on the base, `just perf-compare` on the branch).
 9. MUST NOT commit tests marked `#[ignore]` without an issue or comment explaining when they run.
+10. MUST link a test to each acceptance scenario it verifies with a `/// Verifies: <scenario>` doc line (`openspec/AGENTS.md`), and only when the test asserts that scenario's outcome.
 
 ## Enforcement
 
 | Rule | Mechanism |
 |---|---|
+| 10 (principle 2) | `/// Verifies: <scenario>` tags on tests (`openspec/AGENTS.md`); CI `coverage` job (`cargo xtask spec-coverage --run`) reports linked and passing scenarios per capability, and fails on dangling tags. The percentage is reported, not gated yet. |
 | 1, 2, 4, 5 | CI `test` job (`cargo test` with the platform's crate selection) on Linux x64/arm64, Windows x64/arm64, macOS. |
 | 3 | Fixture design; reviewers check new process spawns use it. |
 | 6, 7 | CI `perf` job: measures the base commit and the PR on the same runner and fails on >10 % regressions (`crates/xtask/src/metric.rs`, tolerance and absolute slack per metric). |

@@ -30,6 +30,16 @@ A change that only implements existing requirements still gets a proposal and ta
 
 - **Requirement ids** (`FR-<MODULE>-NNN`, `NFR-<BRD>-NNN`) are the join key. Put them in test names' doc comments or test module docs, PR descriptions and commit bodies — not in code comments that explain behaviour (state the invariant instead).
 - **Scenarios → tests**: each `<id> acceptance N` scenario should map to an automated test or a perf metric in `cargo xtask perf`; the change's `tasks.md` names which.
+- **Tagging a test**: put one doc line per scenario on the `#[test]` / `#[tokio::test]` function, naming the scenario exactly as it appears after `#### Scenario: ` (`<id> acceptance N`, `<id> specified behaviour`, or `<NFR-id> target is met`):
+
+  ```rust
+  /// Verifies: FR-CO02-011 acceptance 1
+  #[tokio::test]
+  async fn changed_host_key_always_aborts() { … }
+  ```
+
+  Tag only what the test asserts: its setup matches the scenario's GIVEN/WHEN and it checks the THEN (a library-level equivalent of a UI outcome is fine; a test that covers only part of the THEN is not). `specified behaviour` restates the whole requirement, so it is tagged on tests that each verify a central part of it; read it as "has evidence", not "fully verified". A test may carry several tags and a scenario may be tagged on several tests, such as both `TermCore` parity suites. Tags work in `src/**` unit tests and `tests/*.rs` integration tests, but not in shared test modules like `tests/common/mod.rs`.
+- **Coverage report**: `just spec-coverage` (`cargo xtask spec-coverage [--phase P1|P2|P3] [--run] [--json FILE]`) counts scenarios per capability and module that are *linked* to a tagged test, and with `--run` builds and runs only the tagged tests and counts a scenario as *covered* when a linked test passes. NFRs carry no phase, so `--phase` counts FRs only. A dangling tag fails the run: one naming an unknown requirement or scenario, or one not on a test function. CI's `coverage` job uploads the JSON report; the percentage is not gated yet.
 - **Interfaces** (`## Interfaces`, `IF-xx-nn`) are the contract for crate APIs, the local control endpoint and MCP tools. Changing one requires a MODIFIED delta.
 - **Data entities** describe stored records; schema changes in `termax-vault` need a matching delta and a migration.
 - **NFR targets** are enforced by `cargo xtask perf` (targets) and its CI regression gate.
