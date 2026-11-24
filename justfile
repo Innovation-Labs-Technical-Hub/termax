@@ -27,10 +27,10 @@ doctor:
     @echo "fmt:    $(cargo fmt --version 2>/dev/null || echo 'missing: rustup component add rustfmt')"
     @echo "deny:   $(cargo deny --version 2>/dev/null || echo 'missing: just setup')"
     @echo "sshd:   $( (/usr/sbin/sshd -V 2>&1 || true) | grep -m1 OpenSSH || echo 'missing: SSH interop tests will skip')"
-    @echo "zig:    $(zig version 2>/dev/null || echo 'missing: only needed for the Ghostty backend (just zig-install)')"
+    @echo "zig:    $(zig version 2>/dev/null || echo 'missing: required for the terminal backend (just zig-install)')"
 
-# Install rustup components, the MSRV toolchain and cargo-deny
-setup:
+# Install rustup components, the MSRV toolchain, cargo-deny and Zig
+setup: zig-install
     rustup component add rustfmt clippy
     rustup toolchain install {{msrv}} --profile minimal
     cargo install --locked cargo-deny
@@ -55,9 +55,9 @@ zig-install:
 
 # ── Everyday checks ─────────────────────────────────────────────────────────
 
-# Build (default members; the Zig-based Ghostty backend is separate)
+# Build the workspace (Zig must be on PATH for the terminal backend)
 build:
-    cargo build
+    cargo build --workspace
 
 # Format all code
 fmt:
@@ -66,11 +66,11 @@ fmt:
 # Lint with warnings as errors (same as CI)
 lint:
     cargo fmt --all --check
-    cargo clippy --all-targets -- -D warnings
+    cargo clippy --workspace --all-targets -- -D warnings
 
 # Run all tests, or one crate's: `just test termax-ssh`
 test crate="":
-    cargo test {{ if crate == "" { "" } else { "-p " + crate } }}
+    cargo test {{ if crate == "" { "--workspace" } else { "-p " + crate } }}
 
 # Run only the SSH tests against a throwaway local OpenSSH sshd
 test-ssh:
@@ -82,35 +82,34 @@ deny:
 
 # Check the build on the minimum supported Rust version
 msrv:
-    cargo +{{msrv}} check --all-targets
+    cargo +{{msrv}} check --workspace --all-targets
 
 # Everything CI runs on every platform, in order
 ci: lint test deny
 
 # Build and open the API docs
 doc:
-    cargo doc --no-deps --open
+    cargo doc --workspace --no-deps --open
 
 # Remove build output, perf results and the demo vault
 clean:
     cargo clean
 
-# ── Ghostty backend (needs Zig) ─────────────────────────────────────────────
+# ── Terminal backends ───────────────────────────────────────────────────────
 
-# Lint and test the Ghostty backend
-ghostty-test:
-    cargo clippy -p termax-term-ghostty -p termax-term-ghostty-sys --all-targets -- -D warnings
-    cargo test -p termax-term-ghostty
+# Test both TermCore backends against their shared expectations
+term-test:
+    cargo test -p termax-term -p termax-term-ghostty
 
-# Terminal numbers for both backends, written side by side as JSON
-ghostty-compare:
+# Terminal numbers for Ghostty (default) and alacritty, written side by side as JSON
+compare-backends:
     mkdir -p "{{perf_dir}}"
-    cargo xtask perf --no-ssh --json "{{perf_dir}}/alacritty.json"
-    cargo run -q --release -p xtask --features ghostty -- perf --no-ssh --backend ghostty --json "{{perf_dir}}/ghostty.json"
+    cargo xtask perf --no-ssh --json "{{perf_dir}}/ghostty.json"
+    cargo xtask perf --no-ssh --backend alacritty --json "{{perf_dir}}/alacritty.json"
 
 # ── Performance ─────────────────────────────────────────────────────────────
 
-# Run the perf harness: `just perf --no-ssh`, `just perf --check`
+# Run the perf harness: `just perf --no-ssh`, `just perf --backend alacritty`
 perf *args:
     cargo xtask perf {{args}}
 

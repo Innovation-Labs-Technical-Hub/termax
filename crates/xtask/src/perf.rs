@@ -140,25 +140,41 @@ pub fn run(opts: &Options) -> Result<bool> {
         crate::ssh_perf::run(&mut metrics)?;
     }
 
-    let baseline = opts
+    let mut note = "";
+    let baseline = match opts
         .baseline
         .as_deref()
         .map(metric::load_baseline)
-        .transpose()?;
+        .transpose()?
+    {
+        // Numbers from another terminal backend are not a regression baseline:
+        // a deliberate backend switch would otherwise read as a slowdown.
+        Some(b) if b.backend != opts.backend_name => {
+            println!(
+                "baseline was measured on {}, this run on {}; regression gate skipped\n",
+                b.backend, opts.backend_name
+            );
+            note = " (baseline from another backend)";
+            None
+        }
+        Some(b) => Some(b.values),
+        None => {
+            note = " (no baseline given)";
+            None
+        }
+    };
     let verdict = metric::report(&metrics, baseline.as_ref(), opts.tolerance);
     if let Some(path) = &opts.json {
-        std::fs::write(path, serde_json::to_vec_pretty(&metrics)?)
+        let results = metric::Results {
+            backend: opts.backend_name.into(),
+            metrics,
+        };
+        std::fs::write(path, serde_json::to_vec_pretty(&results)?)
             .with_context(|| format!("writing {}", path.display()))?;
     }
     println!(
-        "\n{} target(s) missed, {} regression(s){}",
-        verdict.targets_missed,
-        verdict.regressions,
-        if baseline.is_some() {
-            ""
-        } else {
-            " (no baseline given)"
-        }
+        "\n{} target(s) missed, {} regression(s){note}",
+        verdict.targets_missed, verdict.regressions
     );
     Ok(verdict.regressions == 0 && (!opts.check || verdict.targets_missed == 0))
 }

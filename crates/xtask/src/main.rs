@@ -23,18 +23,17 @@ struct Cli {
 
 #[derive(Clone, Copy, ValueEnum)]
 enum Backend {
-    Alacritty,
-    /// Requires building xtask with `--features ghostty`.
-    #[cfg(feature = "ghostty")]
+    /// libghostty-vt (default).
     Ghostty,
+    /// alacritty_terminal, kept for comparison and as a fallback.
+    Alacritty,
 }
 
 impl Backend {
     fn name(self) -> &'static str {
         match self {
-            Backend::Alacritty => "alacritty_terminal",
-            #[cfg(feature = "ghostty")]
             Backend::Ghostty => "libghostty-vt",
+            Backend::Alacritty => "alacritty_terminal",
         }
     }
 
@@ -43,7 +42,6 @@ impl Backend {
             Backend::Alacritty => {
                 |c: TermConfig| Box::new(AlacrittyTerm::new(c)) as Box<dyn TermCore>
             }
-            #[cfg(feature = "ghostty")]
             Backend::Ghostty => |c: TermConfig| {
                 Box::new(termax_term_ghostty::GhosttyTerm::new(c)) as Box<dyn TermCore>
             },
@@ -56,7 +54,7 @@ enum Command {
     /// Run the performance harness.
     Perf {
         /// Terminal core to measure.
-        #[arg(long, value_enum, default_value_t = Backend::Alacritty)]
+        #[arg(long, value_enum, default_value_t = Backend::Ghostty)]
         backend: Backend,
         /// Also fail when a target from the architecture brief is missed.
         #[arg(long)]
