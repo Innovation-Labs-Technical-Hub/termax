@@ -1386,131 +1386,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
-name = "oxt-cli"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "directories",
- "oxt-core",
- "oxt-interop",
- "oxt-policy",
- "oxt-vault",
- "rpassword",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "oxt-core"
-version = "0.1.0"
-dependencies = [
- "serde",
- "thiserror",
- "uuid",
-]
-
-[[package]]
-name = "oxt-interop"
-version = "0.1.0"
-dependencies = [
- "base64",
- "glob",
- "hmac 0.12.1",
- "oxt-core",
- "sha1 0.10.7",
- "sha2 0.10.9",
- "tempfile",
- "thiserror",
-]
-
-[[package]]
-name = "oxt-policy"
-version = "0.1.0"
-dependencies = [
- "oxt-core",
- "regex",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "thiserror",
- "toml",
- "tree-sitter",
- "tree-sitter-bash",
-]
-
-[[package]]
-name = "oxt-ssh"
-version = "0.1.0"
-dependencies = [
- "oxt-interop",
- "oxt-sshd-fixture",
- "oxt-vault",
- "regex-lite",
- "russh",
- "tempfile",
- "thiserror",
- "tokio",
- "tracing",
- "zeroize",
-]
-
-[[package]]
-name = "oxt-sshd-fixture"
-version = "0.1.0"
-dependencies = [
- "oxt-ssh",
- "tempfile",
-]
-
-[[package]]
-name = "oxt-term"
-version = "0.1.0"
-dependencies = [
- "alacritty_terminal",
- "thiserror",
-]
-
-[[package]]
-name = "oxt-term-ghostty"
-version = "0.1.0"
-dependencies = [
- "memory-stats",
- "oxt-term",
- "oxt-term-ghostty-sys",
-]
-
-[[package]]
-name = "oxt-term-ghostty-sys"
-version = "0.1.0"
-dependencies = [
- "libghostty-vt",
- "libghostty-vt-sys",
-]
-
-[[package]]
-name = "oxt-vault"
-version = "0.1.0"
-dependencies = [
- "argon2",
- "chacha20poly1305",
- "data-encoding",
- "getrandom",
- "hkdf",
- "hmac 0.13.0",
- "oxt-core",
- "rusqlite",
- "secrecy",
- "serde",
- "serde_json",
- "sha2 0.11.0",
- "tempfile",
- "thiserror",
- "zeroize",
-]
-
-[[package]]
 name = "p256"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2463,6 +2338,131 @@ dependencies = [
 ]
 
 [[package]]
+name = "termax-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "directories",
+ "rpassword",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "termax-core",
+ "termax-interop",
+ "termax-policy",
+ "termax-vault",
+]
+
+[[package]]
+name = "termax-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "thiserror",
+ "uuid",
+]
+
+[[package]]
+name = "termax-interop"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "glob",
+ "hmac 0.12.1",
+ "sha1 0.10.7",
+ "sha2 0.10.9",
+ "tempfile",
+ "termax-core",
+ "thiserror",
+]
+
+[[package]]
+name = "termax-policy"
+version = "0.1.0"
+dependencies = [
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "termax-core",
+ "thiserror",
+ "toml",
+ "tree-sitter",
+ "tree-sitter-bash",
+]
+
+[[package]]
+name = "termax-ssh"
+version = "0.1.0"
+dependencies = [
+ "regex-lite",
+ "russh",
+ "tempfile",
+ "termax-interop",
+ "termax-sshd-fixture",
+ "termax-vault",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "zeroize",
+]
+
+[[package]]
+name = "termax-sshd-fixture"
+version = "0.1.0"
+dependencies = [
+ "tempfile",
+ "termax-ssh",
+]
+
+[[package]]
+name = "termax-term"
+version = "0.1.0"
+dependencies = [
+ "alacritty_terminal",
+ "thiserror",
+]
+
+[[package]]
+name = "termax-term-ghostty"
+version = "0.1.0"
+dependencies = [
+ "memory-stats",
+ "termax-term",
+ "termax-term-ghostty-sys",
+]
+
+[[package]]
+name = "termax-term-ghostty-sys"
+version = "0.1.0"
+dependencies = [
+ "libghostty-vt",
+ "libghostty-vt-sys",
+]
+
+[[package]]
+name = "termax-vault"
+version = "0.1.0"
+dependencies = [
+ "argon2",
+ "chacha20poly1305",
+ "data-encoding",
+ "getrandom",
+ "hkdf",
+ "hmac 0.13.0",
+ "rusqlite",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "tempfile",
+ "termax-core",
+ "thiserror",
+ "zeroize",
+]
+
+[[package]]
 name = "thiserror"
 version = "2.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2972,11 +2972,12 @@ dependencies = [
  "anyhow",
  "clap",
  "memory-stats",
- "oxt-ssh",
- "oxt-sshd-fixture",
- "oxt-term",
  "serde",
  "serde_json",
+ "termax-ssh",
+ "termax-sshd-fixture",
+ "termax-term",
+ "termax-term-ghostty",
  "tokio",
 ]
 

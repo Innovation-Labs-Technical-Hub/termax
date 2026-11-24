@@ -1,0 +1,15 @@
+[package]
+name = "termax-sshd-fixture"
+description = "Throwaway unprivileged OpenSSH sshd for Termax tests and the perf harness"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+termax-ssh = { path = "../termax-ssh" }
+tempfile.workspace = true
+
+[lints]
+workspace = true

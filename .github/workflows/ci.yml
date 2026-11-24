@@ -22,9 +22,26 @@ jobs:
           [ -x /usr/sbin/sshd ] || { sudo apt-get update && sudo apt-get install -y openssh-server; }
           # Ubuntu's sshd refuses to start without its privilege-separation directory.
           sudo mkdir -p /run/sshd
+      # Default members only: the Ghostty backend needs Zig and has its own job.
       - run: cargo fmt --all --check
-      - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test --workspace
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+  ghostty:
+    # Experimental backend; built on Linux only until other platforms are verified.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+      - run: cargo clippy -p termax-term-ghostty -p termax-term-ghostty-sys --all-targets -- -D warnings
+      - run: cargo test -p termax-term-ghostty
+      - name: Backend comparison (report only)
+        run: cargo run --release -p xtask --features ghostty -- perf --no-ssh --backend ghostty
   deny:
     runs-on: ubuntu-24.04
     steps:

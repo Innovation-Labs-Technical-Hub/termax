@@ -8,7 +8,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
-use oxt_term::{Budget, Frame, GridSize, TermConfig, TermCore, TermEvent};
+use termax_term::{Budget, Frame, GridSize, TermConfig, TermCore, TermEvent};
 
 use crate::metric::{self, DEFAULT_TOLERANCE, Metric};
 use crate::workloads;

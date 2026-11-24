@@ -5,13 +5,14 @@
 mod metric;
 mod perf;
 mod ssh_perf;
+mod sshd;
 mod workloads;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand, ValueEnum};
-use oxt_term::{AlacrittyTerm, TermConfig, TermCore};
+use termax_term::{AlacrittyTerm, TermConfig, TermCore};
 
 #[derive(Parser)]
 #[command(name = "xtask")]
@@ -23,12 +24,17 @@ struct Cli {
 #[derive(Clone, Copy, ValueEnum)]
 enum Backend {
     Alacritty,
+    /// Requires building xtask with `--features ghostty`.
+    #[cfg(feature = "ghostty")]
+    Ghostty,
 }
 
 impl Backend {
     fn name(self) -> &'static str {
         match self {
             Backend::Alacritty => "alacritty_terminal",
+            #[cfg(feature = "ghostty")]
+            Backend::Ghostty => "libghostty-vt",
         }
     }
 
@@ -37,6 +43,10 @@ impl Backend {
             Backend::Alacritty => {
                 |c: TermConfig| Box::new(AlacrittyTerm::new(c)) as Box<dyn TermCore>
             }
+            #[cfg(feature = "ghostty")]
+            Backend::Ghostty => |c: TermConfig| {
+                Box::new(termax_term_ghostty::GhosttyTerm::new(c)) as Box<dyn TermCore>
+            },
         }
     }
 }
@@ -71,6 +81,8 @@ enum Command {
         #[arg(long)]
         no_ssh: bool,
     },
+    /// Start a throwaway OpenSSH sshd for manual testing (Ctrl-C stops it).
+    Sshd,
 }
 
 fn main() -> ExitCode {
@@ -96,6 +108,7 @@ fn main() -> ExitCode {
             tabs,
             ssh: !no_ssh,
         }),
+        Command::Sshd => sshd::run().map(|()| true),
     };
     match result {
         Ok(true) => ExitCode::SUCCESS,

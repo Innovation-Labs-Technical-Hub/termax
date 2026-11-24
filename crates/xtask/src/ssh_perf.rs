@@ -5,8 +5,8 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
-use oxt_ssh::Session;
-use oxt_sshd_fixture::{Sshd, trusted_ctx};
+use termax_ssh::Session;
+use termax_sshd_fixture::{Sshd, trusted_ctx};
 
 use crate::metric::Metric;
 
@@ -69,7 +69,8 @@ async fn measure(sshd: &Sshd, metrics: &mut Vec<Metric>) -> Result<()> {
     }
     session.disconnect().await?;
     let ours_mb_s = mb_per_s(ours);
-    metrics.push(Metric::higher("ssh channel throughput (oxt-ssh)", ours_mb_s, "MB/s").ungated());
+    metrics
+        .push(Metric::higher("ssh channel throughput (termax-ssh)", ours_mb_s, "MB/s").ungated());
 
     match openssh_bulk(sshd, &command)? {
         Some(theirs) => {
@@ -84,7 +85,7 @@ async fn measure(sshd: &Sshd, metrics: &mut Vec<Metric>) -> Result<()> {
             );
             metrics.push(
                 Metric::higher(
-                    "ssh throughput ratio oxt/OpenSSH",
+                    "ssh throughput ratio tmx/OpenSSH",
                     ours_mb_s / theirs_mb_s,
                     "x",
                 )
