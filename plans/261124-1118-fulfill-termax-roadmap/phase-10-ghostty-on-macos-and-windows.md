@@ -1,6 +1,6 @@
 ---
 title: "Phase 10: Ghostty on macOS and Windows"
-status: todo
+status: in-progress
 priority: P2
 effort: "2–3 person-weeks (depends on upstream)"
 dependencies: []
@@ -27,7 +27,7 @@ Owner: Terminal engineer · Priority: P2 · Effort: 2–3 person-weeks (depends 
 
 ## Todo
 
-- [ ] Upstream path evaluated
+- [x] Upstream path evaluated (`plans/reports/researcher-261124-1824-ghostty-macos-windows.md`: `ghostty-vt` 0.9.0 + Zig 0.17.1; blocked on decisions GH-1…GH-3)
 - [ ] Ghostty builds on macOS 26 SDK
 - [ ] Ghostty builds on Windows x64/arm64
 - [ ] Defaults switched, CI exclusion removed

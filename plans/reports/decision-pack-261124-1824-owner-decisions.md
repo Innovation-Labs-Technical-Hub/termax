@@ -26,6 +26,9 @@ Totals: 9 architecture decisions, 3 other product decisions, 71 BRD open questio
 |---|---|---|---|---|---|
 | FR-CO01-011 | Quiet period before idle compaction of terminal history | Not specified in the design set. | 30 s · 60 s · 5 min · other | Tech lead | 3 |
 | EXT-1 | Plugin package extension `.oxtpkg` (codename-derived) | Keep, or rename (e.g. `.tmxpkg`). | Keep · Rename | Product owner | 18 |
+| GH-1 | Raise workspace MSRV 1.90 → 1.96 | Needed by `ghostty-vt` 0.9.0 (Ghostty vt-1.0.1), the path that fixes macOS 26 + VS 2026 (phase 10 report). | Raise to 1.96 · Wait for upstream `libghostty-vt` 1.0 (no date) | Tech lead | 10 |
+| GH-2 | Allow `CDLA-Permissive-2.0` in `deny.toml` | Pulled in by `webpki-roots` through `ghostty-vt`'s build-time HTTP client (build dependency only). | Allow · Ask the crate to drop the dependency · Wait | Security engineer + Legal | 10 |
+| GH-3 | Depend on single-maintainer `ghostty-vt` crate | Interim until upstream `libghostty-vt` 1.0 ships; facade keeps the swap local. | Accept interim · Wait | Tech lead | 10 |
 | EXT-2 | Partial-transfer suffix `.oxpart` (codename-derived) | Keep, or rename (e.g. `.tmxpart`). | Keep · Rename | Product owner | 6 |
 
 ## 3. Governance actions (need explicit approval; outward-facing)
