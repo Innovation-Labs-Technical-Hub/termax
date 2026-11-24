@@ -1,4 +1,4 @@
-# Terminal core performance baseline (2026-11-24)
+# Terminal core and SSH performance baseline (2026-11-24)
 
 Machine: developer Linux workstation, release build (`cargo xtask perf`, 64 MiB per workload, best of 3).
 
@@ -10,6 +10,9 @@ Machine: developer Linux workstation, release build (`cargo xtask perf`, 64 MiB 
 | Snapshot, full 200×60 | 0.051 ms | ≤ 1.5 ms (incl. GPU share) | pass |
 | Snapshot, one line 200×60 | 0.002 ms | ≤ 0.2 ms | pass |
 | Memory per 80×24 tab, 10k lines (RSS) | 18.9 MiB | ≤ 3 MiB | miss |
+| SSH connect, loopback (TCP + ML-KEM KEX + key auth) | 26.4 ms | – | info |
+| SSH new channel + exec on existing connection | 1.6 ms | ≤ 20 ms + network | pass |
+| SSH channel throughput, 128 MiB, loopback | 986 MB/s (OpenSSH client: 651 MB/s) | ≥ 0.8× OpenSSH | pass (1.51×) |
 
 ## Where the gaps come from
 - **Throughput:** raw `alacritty_terminal` 0.26 measured in isolation on the same input reaches 177 MB/s with 10k lines of scrollback and 232 MB/s with none. The OxTerm wrapper (4 KiB chunks for the time budget, OSC 7/133 pre-scanner) costs about 11 %. The 300 MB/s target is therefore above what the chosen backend delivers on this machine, not a wrapper problem.

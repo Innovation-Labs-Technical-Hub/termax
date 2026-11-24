@@ -44,4 +44,4 @@ Date: 2026-11-24. Backend: russh 0.65.4 (aws-lc-rs). Server: `SSH-2.0-OpenSSH_10
 ## Notes
 
 - russh logs at `error` level ("Maximum packet size ... should not larger than a TCP packet") on every connect, because the required 256 KiB default exceeds 65535. The message is harmless: russh's transport limit is sized for 256 KiB channel packets.
-- The `--no-deps` flag is needed for `cargo clippy -p oxt-ssh` because `oxt-vault` currently fails `collapsible_if` under clippy 1.99. That is a pre-existing issue outside this crate.
+- The sshd harness now lives in `crates/oxt-sshd-fixture` so the perf harness can reuse it.
