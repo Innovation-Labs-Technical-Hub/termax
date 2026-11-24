@@ -265,7 +265,7 @@ For each, decide whether the code changes to match the spec or the spec changes 
 | 4 | CO-01/CO-02 error codes | Disconnects carry `TMX-<AREA>-NNN` codes and a connection log | No codes, no connection log in termax-ssh (planned in phase 3) | Tech lead |
 | 5 | FR-CO11-003 | known_hosts import handles hashed entries and markers | CLI import skips hashed, `@cert-authority`, `@revoked` lines | Tech lead |
 | 6 | CO-11 export | Unexpressible settings exported as `# termax:` comments | Dropped silently | Tech lead |
-| 7 | CO-08 vault | (see spec for plaintext columns) | Host labels stored in plaintext index column | Security engineer |
+| 7 | FR-CO08-002 per-record encryption | Hosts, labels, tags and paths live in the encrypted payload | Host labels (and protocol, env) are plaintext index columns | Security engineer |
 | 8 | FR-PL04-002 | Vault password not taken from an environment variable | `TMX_VAULT_PASSWORD` accepted | Security engineer |
 | 9 | FR-PL04-009 | Documented exit-code table | `tmx` exit codes differ (policy check 0/2/3, errors 1) | Tech lead |
 | 10 | FR-CO04-009 | OSC 52 reads are always refused | Reads can be answered under the Ask policy | Security engineer |
