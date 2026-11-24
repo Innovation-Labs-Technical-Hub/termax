@@ -1,0 +1,19 @@
+[package]
+name = "xtask"
+description = "OxTerm developer tasks: performance harness and budget gate"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+oxt-term = { path = "../oxt-term" }
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+memory-stats = "1"
+serde.workspace = true
+serde_json = "1"
+
+[lints]
+workspace = true

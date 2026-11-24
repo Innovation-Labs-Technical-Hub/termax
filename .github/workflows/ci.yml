@@ -24,3 +24,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: EmbarkStudios/cargo-deny-action@v2
+  perf:
+    # Report-only until the terminal core meets the targets; see
+    # plans/reports/perf-261124-1028-terminal-core-baseline.md. Switch to
+    # `cargo xtask perf --check` to make it a gate.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo xtask perf --json perf.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perf
+          path: perf.json
