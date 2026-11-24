@@ -33,7 +33,8 @@ Scope: every crate under `crates/` (the Cargo workspace), plus `tools/` scripts 
 | 1, 2, 10 | CI `test` job on 5 platforms: `cargo fmt --all --check`, `cargo clippy … -D warnings`; `unsafe_code = "forbid"` in `[workspace.lints.rust]` fails compilation. `just msrv` checks the MSRV toolchain locally. |
 | 3 | Compile-time: a reverse dependency would create a cycle or an unused-crate warning; reviewers check `Cargo.toml` diffs. Planned: `cargo-deny` `[bans]` wrappers or a `cargo metadata` check in xtask. |
 | 4 | `cargo-deny` (`deny` job) for advisories, yanked crates and licences; review for pins. |
-| 5, 6, 7, 13 | Review checklist (PR template). Planned: `clippy::unwrap_used`, `clippy::expect_used` and `clippy::print_stdout` as `warn` for library crates once existing call sites are audited. |
+| 5, 7, 13 | Review checklist (PR template). |
+| 6, 13 | `clippy::unwrap_used`, `clippy::expect_used` and `clippy::print_stdout` (`warn`, so `-D warnings` fails CI) in `[workspace.lints.clippy]`; `clippy.toml` exempts tests. An invariant `expect` carries `#[allow(clippy::expect_used, reason = "…")]` at the narrowest scope; binaries (`termax-cli`, `xtask`), examples and test support opt out at the crate root with a reason. Libraries log through `tracing`, never stdout. |
 | 8 | Unit tests that use a manual clock (e.g. `termax-policy` rate-limit tests). |
 | 11, 12 | Review. |
 

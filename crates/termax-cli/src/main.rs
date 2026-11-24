@@ -1,6 +1,8 @@
 //! `tmx` — Termax command-line tool. Shares the encrypted local vault with
 //! the desktop app.
 
+#![allow(clippy::print_stdout, reason = "a CLI: stdout is its output")]
+
 mod hosts_cmd;
 mod import_cmd;
 mod policy_cmd;

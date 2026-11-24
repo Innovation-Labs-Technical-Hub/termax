@@ -1,3 +1,9 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test helpers outside #[test] functions; a panic is a test failure"
+)]
+
 use std::path::Path;
 
 use base64::Engine as _;

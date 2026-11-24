@@ -1,5 +1,11 @@
 //! Integration tests against a real OpenSSH sshd started per test.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test helpers outside #[test] functions; a panic is a test failure"
+)]
+
 mod common;
 
 use std::sync::Arc;
