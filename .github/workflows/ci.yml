@@ -8,9 +8,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # windows-2022, macos-14 and macos-15 are a temporary probe of which
-        # runner images can build the Zig-based Ghostty backend.
-        os: [ubuntu-24.04, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-latest, windows-2022, macos-14, macos-15]
+        os: [ubuntu-24.04, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -18,10 +16,21 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      # The default terminal backend (libghostty-vt) is built with Zig.
+      # The Ghostty terminal backend (default on Linux) is built with Zig. Zig
+      # 0.15.2 cannot yet build it against the macOS 26 SDK or Visual Studio
+      # 2026's C++ library, so other platforms use the alacritty backend.
       - uses: mlugg/setup-zig@v2
+        if: runner.os == 'Linux'
         with:
           version: 0.15.2
+      - name: Select crates
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            echo "CRATES=--workspace" >> "$GITHUB_ENV"
+          else
+            echo "CRATES=--workspace --exclude termax-term-ghostty --exclude termax-term-ghostty-sys" >> "$GITHUB_ENV"
+          fi
       - name: Prepare sshd for interop tests
         if: runner.os == 'Linux'
         run: |
@@ -29,8 +38,10 @@ jobs:
           # Ubuntu's sshd refuses to start without its privilege-separation directory.
           sudo mkdir -p /run/sshd
       - run: cargo fmt --all --check
-      - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test --workspace
+      - run: cargo clippy ${{ env.CRATES }} --all-targets -- -D warnings
+        shell: bash
+      - run: cargo test ${{ env.CRATES }}
+        shell: bash
   deny:
     runs-on: ubuntu-24.04
     steps:

@@ -11,6 +11,8 @@ perf_dir := out_dir / "perf"
 demo_password := "termax-demo-password"
 msrv := `sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml | head -1`
 zig_version := "0.15.2"
+# The Ghostty backend (default on Linux) only builds on Linux for now; see README.
+crates := if os() == "linux" { "--workspace" } else { "--workspace --exclude termax-term-ghostty --exclude termax-term-ghostty-sys" }
 
 # List recipes
 default:
@@ -27,7 +29,7 @@ doctor:
     @echo "fmt:    $(cargo fmt --version 2>/dev/null || echo 'missing: rustup component add rustfmt')"
     @echo "deny:   $(cargo deny --version 2>/dev/null || echo 'missing: just setup')"
     @echo "sshd:   $( (/usr/sbin/sshd -V 2>&1 || true) | grep -m1 OpenSSH || echo 'missing: SSH interop tests will skip')"
-    @echo "zig:    $(zig version 2>/dev/null || echo 'missing: required for the terminal backend (just zig-install)')"
+    @echo "zig:    $(zig version 2>/dev/null || echo 'missing: required on Linux for the Ghostty terminal backend (just zig-install)')"
 
 # Install rustup components, the MSRV toolchain, cargo-deny and Zig
 setup: zig-install
@@ -55,9 +57,9 @@ zig-install:
 
 # ── Everyday checks ─────────────────────────────────────────────────────────
 
-# Build the workspace (Zig must be on PATH for the terminal backend)
+# Build the workspace (on Linux, Zig must be on PATH for the Ghostty backend)
 build:
-    cargo build --workspace
+    cargo build {{crates}}
 
 # Format all code
 fmt:
@@ -66,11 +68,11 @@ fmt:
 # Lint with warnings as errors (same as CI)
 lint:
     cargo fmt --all --check
-    cargo clippy --workspace --all-targets -- -D warnings
+    cargo clippy {{crates}} --all-targets -- -D warnings
 
 # Run all tests, or one crate's: `just test termax-ssh`
 test crate="":
-    cargo test {{ if crate == "" { "--workspace" } else { "-p " + crate } }}
+    cargo test {{ if crate == "" { crates } else { "-p " + crate } }}
 
 # Run only the SSH tests against a throwaway local OpenSSH sshd
 test-ssh:
@@ -82,14 +84,14 @@ deny:
 
 # Check the build on the minimum supported Rust version
 msrv:
-    cargo +{{msrv}} check --workspace --all-targets
+    cargo +{{msrv}} check {{crates}} --all-targets
 
 # Everything CI runs on every platform, in order
 ci: lint test deny
 
 # Build and open the API docs
 doc:
-    cargo doc --workspace --no-deps --open
+    cargo doc {{crates}} --no-deps --open
 
 # Remove build output, perf results and the demo vault
 clean:
@@ -97,11 +99,12 @@ clean:
 
 # ── Terminal backends ───────────────────────────────────────────────────────
 
-# Test both TermCore backends against their shared expectations
+# Test the TermCore backends against their shared expectations (Ghostty on Linux only)
 term-test:
-    cargo test -p termax-term -p termax-term-ghostty
+    cargo test -p termax-term {{ if os() == "linux" { "-p termax-term-ghostty" } else { "" } }}
 
-# Terminal numbers for Ghostty (default) and alacritty, written side by side as JSON
+# Terminal numbers for Ghostty and alacritty, written side by side as JSON (Linux)
+[linux]
 compare-backends:
     mkdir -p "{{perf_dir}}"
     cargo xtask perf --no-ssh --json "{{perf_dir}}/ghostty.json"

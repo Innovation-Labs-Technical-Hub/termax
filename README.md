@@ -23,7 +23,7 @@ The design set (C4 architecture, BRD-00…13, module catalogue, mockups) lives o
 | `termax-vault` | Encrypted local store (SQLite WAL + per-record XChaCha20-Poly1305, Argon2id + Secret Key) |
 | `termax-ssh` | SSH client facade over russh: strict KEX + ML-KEM, host-key trust, auth, multiplexed channels, `-L`, ProxyJump |
 | `termax-term` | `TermCore` terminal-core trait, shared input encoders, and the alacritty_terminal backend (kept for comparison and as a fallback) |
-| `termax-term-ghostty` (+ `-sys`) | Default `TermCore` backend on libghostty-vt (Ghostty's terminal core); built with Zig 0.15.2 |
+| `termax-term-ghostty` (+ `-sys`) | Default `TermCore` backend on Linux, on libghostty-vt (Ghostty's terminal core); built with Zig 0.15.2. macOS and Windows use the alacritty backend until Ghostty's Zig build supports the macOS 26 SDK and Visual Studio 2026 |
 | `termax-cli` | The `tmx` command-line tool |
 | `termax-sshd-fixture` | Throwaway unprivileged OpenSSH sshd for tests and the perf harness |
 | `xtask` | Perf harness (`cargo xtask perf`) and `cargo xtask sshd` |
@@ -58,4 +58,4 @@ just term-test          # both backends against the same expectations
 just compare-backends   # Ghostty vs alacritty numbers side by side
 ```
 
-Building needs Zig 0.15.2 on `PATH` (`just zig-install`). The first build of the Ghostty backend in a fresh build directory clones Ghostty from GitHub at a pinned commit; set `GHOSTTY_SOURCE_DIR` to a local checkout of that commit to build offline. CI runs the same checks on Linux, Windows and macOS (amd64 and arm64), `cargo-deny` for the licence and advisory policy in `deny.toml`, and a perf job that fails on >10 % regressions against the PR's base commit (skipped when the base used a different terminal backend).
+On Linux, building needs Zig 0.15.2 on `PATH` (`just zig-install`); on macOS and Windows the Ghostty crates are skipped by `just` and CI. The first build of the Ghostty backend in a fresh build directory clones Ghostty from GitHub at a pinned commit; set `GHOSTTY_SOURCE_DIR` to a local checkout of that commit to build offline. CI runs the same checks on Linux, Windows and macOS (amd64 and arm64), `cargo-deny` for the licence and advisory policy in `deny.toml`, and a perf job that fails on >10 % regressions against the PR's base commit (skipped when the base used a different terminal backend).
