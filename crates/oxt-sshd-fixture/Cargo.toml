@@ -1,0 +1,15 @@
+[package]
+name = "oxt-sshd-fixture"
+description = "Throwaway unprivileged OpenSSH sshd for OxTerm tests and the perf harness"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+oxt-ssh = { path = "../oxt-ssh" }
+tempfile.workspace = true
+
+[lints]
+workspace = true

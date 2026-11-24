@@ -20,6 +20,7 @@ tracing = "0.1"
 zeroize = "1"
 
 [dev-dependencies]
+oxt-sshd-fixture = { path = "../oxt-sshd-fixture" }
 oxt-interop.workspace = true
 tempfile.workspace = true
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "test-util", "process"] }

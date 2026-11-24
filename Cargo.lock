@@ -1425,6 +1425,7 @@ name = "oxt-ssh"
 version = "0.1.0"
 dependencies = [
  "oxt-interop",
+ "oxt-sshd-fixture",
  "oxt-vault",
  "regex-lite",
  "russh",
@@ -1433,6 +1434,14 @@ dependencies = [
  "tokio",
  "tracing",
  "zeroize",
+]
+
+[[package]]
+name = "oxt-sshd-fixture"
+version = "0.1.0"
+dependencies = [
+ "oxt-ssh",
+ "tempfile",
 ]
 
 [[package]]
@@ -2918,9 +2927,12 @@ dependencies = [
  "anyhow",
  "clap",
  "memory-stats",
+ "oxt-ssh",
+ "oxt-sshd-fixture",
  "oxt-term",
  "serde",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]
