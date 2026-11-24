@@ -1,154 +1,175 @@
-//! Terminal-core measurements and their budgets.
+//! Terminal-core measurements. Every function takes a backend factory so the
+//! same numbers can be produced for each `TermCore` implementation.
 
 use std::path::PathBuf;
+use std::sync::mpsc::{RecvTimeoutError, sync_channel};
+use std::sync::{Arc, Mutex};
+use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
-use oxt_term::{AlacrittyTerm, Budget, Frame, GridSize, TermConfig, TermCore};
-use serde::Serialize;
+use oxt_term::{Budget, Frame, GridSize, TermConfig, TermCore, TermEvent};
 
+use crate::metric::{self, DEFAULT_TOLERANCE, Metric};
 use crate::workloads;
 
 /// Parser throughput target on its own thread.
-const MIN_PARSER_MB_S: f64 = 300.0;
+const TARGET_PARSER_MB_S: f64 = 300.0;
 /// Extra memory per 80×24 tab holding 10k lines of ASCII scrollback.
-const MAX_TAB_MIB: f64 = 3.0;
-/// CPU budget for a full 200×60 redraw. The renderer's share is not measured
-/// here, so the snapshot must fit well inside it.
-const MAX_FULL_SNAPSHOT_MS: f64 = 1.5;
+const TARGET_TAB_MIB: f64 = 3.0;
+/// CPU budget for a full 200×60 redraw; the snapshot is only part of it.
+const TARGET_FULL_SNAPSHOT_MS: f64 = 1.5;
 /// Budget for a one-line change (the 1-line scroll target).
-const MAX_LINE_SNAPSHOT_MS: f64 = 0.2;
+const TARGET_LINE_SNAPSHOT_MS: f64 = 0.2;
+/// Typed input must show up within this time while output floods the screen.
+const TARGET_FLOOD_ECHO_MS: f64 = 50.0;
+
+/// Size of each chunk the I/O side hands to the parser.
+const IO_CHUNK: usize = 64 * 1024;
+/// Display refresh the UI pulls frames at.
+const FRAME_INTERVAL: Duration = Duration::from_micros(16_667);
+/// How often a "keystroke echo" marker is injected into the flood.
+const ECHO_EVERY: Duration = Duration::from_millis(20);
+const FLOOD_RUN: Duration = Duration::from_secs(2);
+
+/// Builds a terminal for one measurement.
+pub type Factory = fn(TermConfig) -> Box<dyn TermCore>;
 
 pub struct Options {
+    pub backend_name: &'static str,
+    pub factory: Factory,
     pub check: bool,
     pub json: Option<PathBuf>,
+    pub baseline: Option<PathBuf>,
+    pub tolerance: f64,
     pub bytes: usize,
     pub tabs: usize,
     pub ssh: bool,
 }
 
-#[derive(Serialize)]
-pub struct Metric {
-    name: String,
-    value: f64,
-    unit: &'static str,
-    /// `None` when the metric is informational only.
-    budget: Option<Budget_>,
-    pass: bool,
-}
-
-#[derive(Serialize, Clone, Copy)]
-pub struct Budget_ {
-    limit: f64,
-    higher_is_better: bool,
-}
-
-impl Metric {
-    pub fn new(
-        name: impl Into<String>,
-        value: f64,
-        unit: &'static str,
-        budget: Option<Budget_>,
-    ) -> Self {
-        let pass = budget.is_none_or(|b| {
-            if b.higher_is_better {
-                value >= b.limit
-            } else {
-                value <= b.limit
-            }
-        });
-        Self {
-            name: name.into(),
-            value,
-            unit,
-            budget,
-            pass,
-        }
+impl Options {
+    pub fn default_tolerance() -> f64 {
+        DEFAULT_TOLERANCE
     }
-}
-
-pub fn at_least(limit: f64) -> Option<Budget_> {
-    Some(Budget_ {
-        limit,
-        higher_is_better: true,
-    })
-}
-
-pub fn at_most(limit: f64) -> Option<Budget_> {
-    Some(Budget_ {
-        limit,
-        higher_is_better: false,
-    })
 }
 
 pub fn run(opts: &Options) -> Result<bool> {
     if cfg!(debug_assertions) {
         eprintln!("warning: debug build; numbers are not meaningful (use `cargo xtask perf`)");
     }
+    println!("backend: {}\n", opts.backend_name);
+    let make = opts.factory;
     let mut metrics = Vec::new();
 
-    for (name, data) in [
-        ("parser ascii", workloads::ascii_lines(opts.bytes)),
-        ("parser sgr-heavy", workloads::sgr_heavy(opts.bytes)),
-        ("parser unicode", workloads::unicode_mix(opts.bytes)),
+    for (name, data, target) in [
+        (
+            "parser ascii",
+            workloads::ascii_lines(opts.bytes),
+            Some(TARGET_PARSER_MB_S),
+        ),
+        ("parser sgr-heavy", workloads::sgr_heavy(opts.bytes), None),
+        ("parser unicode", workloads::unicode_mix(opts.bytes), None),
     ] {
-        let mb_s = parser_throughput(&data);
-        // Only plain ASCII carries the hard target; the others show how much
-        // escape and Unicode handling costs relative to it.
-        let budget = (name == "parser ascii")
-            .then_some(())
-            .and(at_least(MIN_PARSER_MB_S));
-        metrics.push(Metric::new(name, mb_s, "MB/s", budget));
+        let m = Metric::higher(name, parser_throughput(make, &data), "MB/s");
+        metrics.push(match target {
+            Some(t) => m.target(t),
+            None => m,
+        });
     }
 
-    let (full_ms, line_ms) = snapshot_costs();
-    metrics.push(Metric::new(
-        "snapshot full 200x60",
-        full_ms,
-        "ms",
-        at_most(MAX_FULL_SNAPSHOT_MS),
-    ));
-    metrics.push(Metric::new(
-        "snapshot one line 200x60",
-        line_ms,
-        "ms",
-        at_most(MAX_LINE_SNAPSHOT_MS),
-    ));
+    let (full_ms, line_ms) = snapshot_costs(make);
+    metrics.push(
+        Metric::lower("snapshot full 200x60", full_ms, "ms")
+            .target(TARGET_FULL_SNAPSHOT_MS)
+            .abs_slack(0.02),
+    );
+    metrics.push(
+        Metric::lower("snapshot one line 200x60", line_ms, "ms")
+            .target(TARGET_LINE_SNAPSHOT_MS)
+            .abs_slack(0.01),
+    );
 
-    let (rss_mib, estimate_mib) = memory_per_tab(opts.tabs)?;
-    metrics.push(Metric::new(
-        "memory per tab (RSS) 80x24 + 10k lines",
-        rss_mib,
-        "MiB",
-        at_most(MAX_TAB_MIB),
-    ));
-    metrics.push(Metric::new(
-        "memory per tab (core estimate)",
-        estimate_mib,
-        "MiB",
-        None,
-    ));
+    for ring_mib in [1, 4] {
+        let (p50, p99) = flood_echo_latency(make, ring_mib << 20);
+        metrics.push(
+            Metric::lower(
+                format!("echo under flood p50, {ring_mib} MiB window"),
+                p50,
+                "ms",
+            )
+            .abs_slack(5.0),
+        );
+        metrics.push(
+            Metric::lower(
+                format!("echo under flood p99, {ring_mib} MiB window"),
+                p99,
+                "ms",
+            )
+            .target(TARGET_FLOOD_ECHO_MS)
+            .abs_slack(5.0),
+        );
+    }
+
+    for (label, lines, target) in [
+        ("empty history", 0, None),
+        ("1k lines", 1_000, None),
+        ("10k lines", 10_000, Some(TARGET_TAB_MIB)),
+    ] {
+        let (rss_mib, estimate_mib) = memory_per_tab(make, opts.tabs, lines)?;
+        // RSS includes allocator reuse and varies run to run, so it is
+        // reported (and held to the target) but only the core's own
+        // estimate, which is deterministic, is gated.
+        let m = Metric::lower(
+            format!("memory per tab 80x24, {label} (RSS)"),
+            rss_mib,
+            "MiB",
+        )
+        .ungated();
+        metrics.push(match target {
+            Some(t) => m.target(t),
+            None => m,
+        });
+        metrics.push(Metric::lower(
+            format!("memory per tab 80x24, {label} (estimate)"),
+            estimate_mib,
+            "MiB",
+        ));
+    }
 
     if opts.ssh {
         crate::ssh_perf::run(&mut metrics)?;
     }
 
-    print_table(&metrics);
+    let baseline = opts
+        .baseline
+        .as_deref()
+        .map(metric::load_baseline)
+        .transpose()?;
+    let verdict = metric::report(&metrics, baseline.as_ref(), opts.tolerance);
     if let Some(path) = &opts.json {
         std::fs::write(path, serde_json::to_vec_pretty(&metrics)?)
             .with_context(|| format!("writing {}", path.display()))?;
     }
-    let all_pass = metrics.iter().all(|m| m.pass);
-    Ok(!opts.check || all_pass)
+    println!(
+        "\n{} target(s) missed, {} regression(s){}",
+        verdict.targets_missed,
+        verdict.regressions,
+        if baseline.is_some() {
+            ""
+        } else {
+            " (no baseline given)"
+        }
+    );
+    Ok(verdict.regressions == 0 && (!opts.check || verdict.targets_missed == 0))
 }
 
 /// Feed `data` in default-sized budgets (as the per-session parser task
 /// does) and return MB/s, best of three runs.
-fn parser_throughput(data: &[u8]) -> f64 {
+fn parser_throughput(make: Factory, data: &[u8]) -> f64 {
     let budget = Budget::default();
     let mut best = Duration::MAX;
     for _ in 0..3 {
-        let mut term = AlacrittyTerm::new(TermConfig {
+        let mut term = make(TermConfig {
             size: GridSize::new(120, 40),
             ..TermConfig::default()
         });
@@ -167,8 +188,8 @@ fn parser_throughput(data: &[u8]) -> f64 {
 }
 
 /// Median cost of a full-screen snapshot and of a snapshot after one line changed.
-fn snapshot_costs() -> (f64, f64) {
-    let mut term = AlacrittyTerm::new(TermConfig {
+fn snapshot_costs(make: Factory) -> (f64, f64) {
+    let mut term = make(TermConfig {
         size: GridSize::new(200, 60),
         ..TermConfig::default()
     });
@@ -193,11 +214,103 @@ fn snapshot_costs() -> (f64, f64) {
             Budget::UNLIMITED,
         );
         let t = Instant::now();
-        let damage = term.snapshot(&mut frame);
+        term.snapshot(&mut frame);
         line.push(t.elapsed());
-        debug_assert!(!damage.full);
     }
     (median_ms(&mut full), median_ms(&mut line))
+}
+
+/// Time from "remote echo sent" to "visible in a published frame" while the
+/// host floods the terminal, with the parser on its own thread behind a
+/// bounded input buffer the size of the SSH receive window (flow control
+/// keeps at most that much output queued ahead of the echo).
+///
+/// Returns (p50, p99) in milliseconds.
+fn flood_echo_latency(make: Factory, window_bytes: usize) -> (f64, f64) {
+    let flood: Arc<[u8]> = workloads::ascii_lines(8 << 20).into();
+    let (tx, rx) = sync_channel::<Vec<u8>>((window_bytes / IO_CHUNK).max(1));
+    let sent_at: Arc<Mutex<Vec<Instant>>> = Arc::default();
+
+    let producer = {
+        let sent_at = Arc::clone(&sent_at);
+        thread::spawn(move || {
+            let start = Instant::now();
+            let mut next_echo = start + ECHO_EVERY;
+            let mut offset = 0;
+            while start.elapsed() < FLOOD_RUN {
+                let end = (offset + IO_CHUNK).min(flood.len());
+                if tx.send(flood[offset..end].to_vec()).is_err() {
+                    return;
+                }
+                offset = if end == flood.len() { 0 } else { end };
+                if Instant::now() >= next_echo {
+                    let mut stamps = sent_at.lock().unwrap();
+                    let marker = format!("\x1b]0;E{}\x07", stamps.len());
+                    stamps.push(Instant::now());
+                    drop(stamps);
+                    if tx.send(marker.into_bytes()).is_err() {
+                        return;
+                    }
+                    next_echo += ECHO_EVERY;
+                }
+            }
+        })
+    };
+
+    let mut term = make(TermConfig {
+        size: GridSize::new(120, 40),
+        ..TermConfig::default()
+    });
+    let mut frame = Frame::default();
+    let mut events = Vec::new();
+    let mut replies = Vec::new();
+    let mut parsed_unshown: Vec<usize> = Vec::new();
+    let mut latencies = Vec::new();
+    let mut last_frame = Instant::now();
+
+    loop {
+        match rx.recv_timeout(FRAME_INTERVAL) {
+            Ok(chunk) => {
+                let mut rest = chunk.as_slice();
+                while !rest.is_empty() {
+                    let fed = term.feed(rest, Budget::default());
+                    rest = &rest[fed.consumed..];
+                    term.drain_replies(&mut replies);
+                    replies.clear();
+                }
+                term.take_events(&mut events);
+                for e in events.drain(..) {
+                    if let TermEvent::Title(t) = e
+                        && let Some(n) = t.strip_prefix('E').and_then(|n| n.parse().ok())
+                    {
+                        parsed_unshown.push(n);
+                    }
+                }
+            }
+            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => break,
+        }
+        // The UI pulls a frame once per display refresh.
+        if last_frame.elapsed() >= FRAME_INTERVAL {
+            term.snapshot(&mut frame);
+            last_frame = Instant::now();
+            let stamps = sent_at.lock().unwrap();
+            for n in parsed_unshown.drain(..) {
+                latencies.push(last_frame - stamps[n]);
+            }
+        }
+    }
+    producer.join().expect("flood producer panicked");
+
+    if latencies.is_empty() {
+        return (f64::NAN, f64::NAN);
+    }
+    latencies.sort();
+    let pct = |p: f64| {
+        let i = ((latencies.len() as f64 * p).ceil() as usize).clamp(1, latencies.len()) - 1;
+        latencies[i].as_secs_f64() * 1e3
+    };
+    (pct(0.50), pct(0.99))
 }
 
 fn median_ms(samples: &mut [Duration]) -> f64 {
@@ -205,19 +318,20 @@ fn median_ms(samples: &mut [Duration]) -> f64 {
     samples[samples.len() / 2].as_secs_f64() * 1e3
 }
 
-/// Average extra memory per 80×24 terminal holding 10k lines of ASCII history.
-fn memory_per_tab(tabs: usize) -> Result<(f64, f64)> {
+/// Average extra memory per 80×24 terminal holding `lines` lines of ASCII
+/// history plus a screenful of prompt output.
+fn memory_per_tab(make: Factory, tabs: usize, lines: usize) -> Result<(f64, f64)> {
     let tabs = tabs.max(1);
-    // Exactly 10k 80-column lines so each tab's history is full.
     let mut history = Vec::new();
-    for i in 0..10_000 {
+    for i in 0..lines.max(1) {
         history.extend_from_slice(format!("{i:>8} {}\r\n", "x".repeat(71)).as_bytes());
     }
+    history.extend_from_slice(b"user@host:~$ ");
 
     let before = rss()?;
     let mut terms = Vec::with_capacity(tabs);
     for _ in 0..tabs {
-        let mut term = AlacrittyTerm::new(TermConfig {
+        let mut term = make(TermConfig {
             size: GridSize::new(80, 24),
             scrollback_lines: 10_000,
             ..TermConfig::default()
@@ -240,27 +354,4 @@ fn rss() -> Result<usize> {
     memory_stats::memory_stats()
         .map(|m| m.physical_mem)
         .context("resident memory is not available on this platform")
-}
-
-fn print_table(metrics: &[Metric]) {
-    println!(
-        "{:<42} {:>12}  {:<6} {:>14}  result",
-        "metric", "value", "unit", "budget"
-    );
-    for m in metrics {
-        let budget = match m.budget {
-            Some(b) if b.higher_is_better => format!(">= {}", b.limit),
-            Some(b) => format!("<= {}", b.limit),
-            None => "-".into(),
-        };
-        let result = match (m.budget, m.pass) {
-            (None, _) => "info",
-            (Some(_), true) => "pass",
-            (Some(_), false) => "FAIL",
-        };
-        println!(
-            "{:<42} {:>12.3}  {:<6} {:>14}  {result}",
-            m.name, m.value, m.unit, budget
-        );
-    }
 }

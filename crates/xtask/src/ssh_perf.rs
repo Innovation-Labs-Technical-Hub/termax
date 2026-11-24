@@ -8,7 +8,7 @@ use anyhow::{Context, Result, bail};
 use oxt_ssh::Session;
 use oxt_sshd_fixture::{Sshd, trusted_ctx};
 
-use crate::perf::{Metric, at_least, at_most};
+use crate::metric::Metric;
 
 /// A duplicated tab opens a new channel on the existing connection.
 const MAX_NEW_CHANNEL_MS: f64 = 20.0;
@@ -38,12 +38,14 @@ async fn measure(sshd: &Sshd, metrics: &mut Vec<Metric>) -> Result<()> {
         connects.push(t.elapsed());
         s.disconnect().await?;
     }
-    metrics.push(Metric::new(
-        "ssh connect (TCP+KEX+auth, loopback)",
-        median_ms(&mut connects),
-        "ms",
-        None,
-    ));
+    metrics.push(
+        Metric::lower(
+            "ssh connect (TCP+KEX+auth, loopback)",
+            median_ms(&mut connects),
+            "ms",
+        )
+        .ungated(),
+    );
 
     let session = Session::connect(&opts, &ctx).await?;
     let mut execs = Vec::new();
@@ -52,12 +54,11 @@ async fn measure(sshd: &Sshd, metrics: &mut Vec<Metric>) -> Result<()> {
         session.exec("true").await?;
         execs.push(t.elapsed());
     }
-    metrics.push(Metric::new(
-        "ssh new channel + exec `true`",
-        median_ms(&mut execs),
-        "ms",
-        at_most(MAX_NEW_CHANNEL_MS),
-    ));
+    metrics.push(
+        Metric::lower("ssh new channel + exec `true`", median_ms(&mut execs), "ms")
+            .target(MAX_NEW_CHANNEL_MS)
+            .ungated(),
+    );
 
     let command = format!("head -c {} /dev/zero", BULK_MIB << 20);
     let t = Instant::now();
@@ -68,28 +69,28 @@ async fn measure(sshd: &Sshd, metrics: &mut Vec<Metric>) -> Result<()> {
     }
     session.disconnect().await?;
     let ours_mb_s = mb_per_s(ours);
-    metrics.push(Metric::new(
-        "ssh channel throughput (oxt-ssh)",
-        ours_mb_s,
-        "MB/s",
-        None,
-    ));
+    metrics.push(Metric::higher("ssh channel throughput (oxt-ssh)", ours_mb_s, "MB/s").ungated());
 
     match openssh_bulk(sshd, &command)? {
         Some(theirs) => {
             let theirs_mb_s = mb_per_s(theirs);
-            metrics.push(Metric::new(
-                "ssh channel throughput (OpenSSH client)",
-                theirs_mb_s,
-                "MB/s",
-                None,
-            ));
-            metrics.push(Metric::new(
-                "ssh throughput ratio oxt/OpenSSH",
-                ours_mb_s / theirs_mb_s,
-                "x",
-                at_least(MIN_THROUGHPUT_RATIO),
-            ));
+            metrics.push(
+                Metric::higher(
+                    "ssh channel throughput (OpenSSH client)",
+                    theirs_mb_s,
+                    "MB/s",
+                )
+                .ungated(),
+            );
+            metrics.push(
+                Metric::higher(
+                    "ssh throughput ratio oxt/OpenSSH",
+                    ours_mb_s / theirs_mb_s,
+                    "x",
+                )
+                .target(MIN_THROUGHPUT_RATIO)
+                .ungated(),
+            );
         }
         None => eprintln!("skipping OpenSSH comparison: `ssh` client not available"),
     }
