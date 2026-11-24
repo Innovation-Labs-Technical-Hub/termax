@@ -252,3 +252,23 @@ Ordered by the earliest plan phase each answer unblocks. Source: `## Open questi
 2. FR-CO01-011 quiet period and questions feeding phases 3–5 (session runtime, SSH, keys/trust).
 3. D4 before release engineering; D5, D8, D9 before their phases start.
 4. D6, D7 and P2 questions before phase 15.
+
+## 6. Spec vs implementation differences (found while linking tests, 2026-11-24)
+
+For each, decide whether the code changes to match the spec or the spec changes (via an OpenSpec change). Until then the affected scenarios stay unlinked in `cargo xtask spec-coverage`.
+
+| # | Requirement | Spec says | Code does | Owner |
+|---|---|---|---|---|
+| 1 | AG-03 built-in rules | Built-in deny rules carry BUILTIN-DENY ids | No rule ids on built-ins | AI engineer |
+| 2 | FR-AG02-011 | Observe-only clients may run read-only allowlisted commands | Every execution by an observe-only client is denied | Product owner + Security engineer |
+| 3 | AG-03 output sanitiser | OSC 8 links become "(link: url)"; redaction marker `[REDACTED:category]` | Link URLs dropped; bare `<REDACTED>` | AI engineer |
+| 4 | CO-01/CO-02 error codes | Disconnects carry `TMX-<AREA>-NNN` codes and a connection log | No codes, no connection log in termax-ssh (planned in phase 3) | Tech lead |
+| 5 | FR-CO11-003 | known_hosts import handles hashed entries and markers | CLI import skips hashed, `@cert-authority`, `@revoked` lines | Tech lead |
+| 6 | CO-11 export | Unexpressible settings exported as `# termax:` comments | Dropped silently | Tech lead |
+| 7 | CO-08 vault | (see spec for plaintext columns) | Host labels stored in plaintext index column | Security engineer |
+| 8 | FR-PL04-002 | Vault password not taken from an environment variable | `TMX_VAULT_PASSWORD` accepted | Security engineer |
+| 9 | FR-PL04-009 | Documented exit-code table | `tmx` exit codes differ (policy check 0/2/3, errors 1) | Tech lead |
+| 10 | FR-CO04-009 | OSC 52 reads are always refused | Reads can be answered under the Ask policy | Security engineer |
+| 11 | CO-04 OSC 52 writes | Default Ask; caps 100 KB / 4 KB | Default Deny; caps 1 MiB / 4 MiB | Security engineer |
+| 12 | CO-04 damage | Cursor-only change damages no rows | alacritty backend marks the cursor row dirty | Terminal engineer |
+| 13 | FR-CO04-013 | Selection survives reflow | Selection cleared on reflow | Terminal engineer |
