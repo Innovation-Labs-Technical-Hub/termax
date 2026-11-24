@@ -140,7 +140,19 @@ impl Sshd {
             }
             self.port = 0;
         }
-        panic!("sshd did not start; see {}", self.log_path().display());
+        let log = std::fs::read_to_string(self.log_path()).unwrap_or_default();
+        panic!(
+            "sshd did not start; last log lines from {}:\n{}",
+            self.log_path().display(),
+            log.lines()
+                .rev()
+                .take(15)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
     }
 
     fn log_path(&self) -> PathBuf {
