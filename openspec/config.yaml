@@ -1,0 +1,86 @@
+schema: spec-driven
+
+context: |
+  Language: en. All artifacts are written in English; keep OpenSpec headings and
+  SHALL/MUST keywords in English. Business owners read Vietnamese: quote
+  Vietnamese titles from the BRDs where they help, and use openspec/glossary.md
+  for terms.
+
+  ## Product
+  Termax is a local-first, agent-native SSH workspace (Termius-class), rebuilt
+  from scratch in Rust. Open-core: desktop/mobile apps and core are Apache-2.0;
+  cloud sync, team vaults, multiplayer and admin are a closed-source service.
+  The design set (Termax_Plan.zip: ARCH-BRIEF, C4 docs, BRD-00…13, modules.yaml)
+  uses the codename "OxTerm"; specs rewrite it to Termax (product), termax-*
+  (crates), tmx (CLI), TMX_* (env vars) and TMX-<AREA>-NNN (error codes).
+  PuTTY 0.74 is a behaviour reference and test-vector source only; no
+  PuTTY/Termius names or logos in the product.
+
+  ## Stack (as built)
+  - Rust edition 2024, workspace MSRV 1.90, `unsafe_code = forbid` except in
+    termax-term-ghostty-sys (one documented `unsafe impl Send`).
+  - termax-core (domain, settings resolver), termax-policy (tree-sitter-bash
+    command policy, audit chain), termax-interop (ssh_config/known_hosts),
+    termax-vault (SQLite WAL via rusqlite 0.43, XChaCha20-Poly1305 per record,
+    Argon2id + Secret Key), termax-ssh (russh 0.65, strict KEX, ML-KEM),
+    termax-term (TermCore trait + alacritty_terminal 0.26),
+    termax-term-ghostty (libghostty-vt 0.2.2, Zig 0.15.2; default backend on
+    Linux), termax-cli (`tmx`), termax-sshd-fixture, xtask (perf harness).
+  - Planned per ARCH-BRIEF: GPUI desktop UI (pending decision D1), rmcp for MCP,
+    wasmtime plugins, Flutter + flutter_rust_bridge mobile, `oxsync` cloud in Rust
+    (axum, Postgres, S3-compatible blobs).
+
+  ## Spec conventions
+  - One capability per BRD: specs/<capability>/spec.md, generated once from the
+    BRD YAML by tools/openspec_from_brd.py, then evolved only through changes.
+  - Requirement names start with the BRD id (FR-<MODULE>-NNN, NFR-<BRD>-NNN) so
+    deltas, code, tests and commits can reference them.
+  - Each requirement carries "Source: BRD-xx <id> · Module · Priority · Phase".
+    MoSCoW priority and phase (P1/P2/P3) are delivery metadata; the requirement
+    text is normative either way.
+  - Acceptance criteria are scenarios named "<id> acceptance N"; the BRD
+    description is the "<id> specified behaviour" scenario.
+  - Text inside the BRDs that says an action "requires confirmation"
+    ("cần xác nhận") describes product behaviour (the user confirms), not an
+    undecided requirement.
+
+  ## Confirmation markers
+  - Undecided business questions carry `[TO CONFIRM · CHỜ XÁC NHẬN]` with an
+    owner. Never resolve one by guessing; it needs the owner's decision,
+    recorded in a change that removes the marker.
+  - Facts the sources call "unverified" / "chưa xác minh" stay verbatim.
+
+  ## Open decisions (ARCH-BRIEF §12 and later)
+  - D1 UI framework after the GPUI vs Tauri bake-off [TO CONFIRM · CHỜ XÁC NHẬN]
+  - D2 GPUI source pin [TO CONFIRM · CHỜ XÁC NHẬN]
+  - D3 product name/trademark: name is Termax (decided); trademark check
+    [TO CONFIRM · CHỜ XÁC NHẬN]
+  - D4 publishing legal entity and Windows signing path [TO CONFIRM · CHỜ XÁC NHẬN]
+  - D5 Mosh strategy (external mosh-client + ET first) [TO CONFIRM · CHỜ XÁC NHẬN]
+  - D6 cloud hosting (Fly.io + Neon default) [TO CONFIRM · CHỜ XÁC NHẬN]
+  - D7 billing provider (Paddle MoR default) [TO CONFIRM · CHỜ XÁC NHẬN]
+  - D8 telemetry off by default [TO CONFIRM · CHỜ XÁC NHẬN]
+  - D9 external agents observe-only by default (implemented in termax-policy)
+    [TO CONFIRM · CHỜ XÁC NHẬN]
+  - Terminal backend: libghostty-vt is the default on Linux (decided
+    2026-11-24); macOS/Windows use alacritty_terminal until Ghostty's Zig build
+    supports the macOS 26 SDK and Visual Studio 2026.
+  - File extensions still derived from the codename: `.oxtpkg` (plugin
+    packages) and `.oxpart` (partial transfers) [TO CONFIRM · CHỜ XÁC NHẬN]
+
+  ## Engineering conventions
+  Follow .principles/ and README.md. Run `just ci` before proposing archive.
+  Commits use conventional commits without plan or requirement IDs in code
+  comments; reference requirement IDs in commit bodies and PRs instead.
+
+rules:
+  proposal:
+    - Cite the BRD requirement IDs (FR-/NFR-) and capabilities the change touches.
+    - State what is out of scope and any [TO CONFIRM · CHỜ XÁC NHẬN] items it depends on.
+  specs:
+    - Keep requirement names prefixed with their BRD id; new requirements get the next free id in that module.
+    - Every requirement needs SHALL or MUST and at least one GIVEN/WHEN + THEN scenario.
+  tasks:
+    - Each task names the requirement or scenario it satisfies and how it is verified (test, perf metric, manual check).
+  design:
+    - Reference the ARCH-BRIEF section or analysis file that motivates each decision.

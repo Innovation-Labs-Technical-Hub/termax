@@ -4,7 +4,7 @@ description = "Send-able owner of a libghostty-vt terminal and render state; the
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-# libghostty-vt 0.2 requires Rust 1.90; the workspace baseline is 1.89.
+# libghostty-vt 0.2 requires Rust 1.90, which is also the workspace MSRV.
 rust-version = "1.90"
 publish = false
 

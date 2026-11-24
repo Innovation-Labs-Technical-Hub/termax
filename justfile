@@ -11,6 +11,7 @@ perf_dir := out_dir / "perf"
 demo_password := "termax-demo-password"
 msrv := `sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml | head -1`
 zig_version := "0.15.2"
+openspec_version := "1.17.0"
 # The Ghostty backend (default on Linux) only builds on Linux for now; see README.
 crates := if os() == "linux" { "--workspace" } else { "--workspace --exclude termax-term-ghostty --exclude termax-term-ghostty-sys" }
 
@@ -125,11 +126,32 @@ perf-baseline:
 perf-compare *args:
     cargo xtask perf --baseline "{{perf_dir}}/baseline.json" {{args}}
 
+# ── Specs (OpenSpec) ────────────────────────────────────────────────────────
+
+# Run the pinned OpenSpec CLI: `just openspec list --specs`
+openspec *args:
+    bunx @fission-ai/openspec@{{openspec_version}} {{args}}
+
+# Validate every spec and change strictly (same as CI)
+spec-validate:
+    bunx @fission-ai/openspec@{{openspec_version}} validate --all --strict
+
+# List capability specs and active changes
+spec-list:
+    bunx @fission-ai/openspec@{{openspec_version}} list --specs
+    bunx @fission-ai/openspec@{{openspec_version}} list
+
+# Re-import specs from the design set's BRD YAML (review the diff; edited specs are overwritten)
+spec-import brd_yaml_dir:
+    python3 tools/openspec_from_brd.py "{{brd_yaml_dir}}" openspec/specs
+    just spec-validate
+
 # ── Playground ──────────────────────────────────────────────────────────────
 
 # Run the tmx CLI: `just tmx policy check "rm -rf /"`
+[positional-arguments]
 tmx *args:
-    cargo run -q -p termax-cli -- {{args}}
+    cargo run -q -p termax-cli -- "$@"
 
 # Ask the agent policy about a command: `just policy "sudo rm -rf /" prod`
 policy command env="none":
@@ -146,9 +168,10 @@ demo-init:
     -just demo import known-hosts
 
 # Run any tmx command against the demo vault: `just demo hosts list`
+[positional-arguments]
 demo *args:
     TMX_VAULT_PASSWORD='{{demo_password}}' TMX_SECRET_KEY="$(cat '{{demo_dir}}/secret-key')" \
-      cargo run -q -p termax-cli -- --db "{{demo_dir}}/vault.db" {{args}}
+      cargo run -q -p termax-cli -- --db "{{demo_dir}}/vault.db" "$@"
 
 # Start a throwaway OpenSSH sshd and print how to connect (Ctrl-C stops it)
 sshd:

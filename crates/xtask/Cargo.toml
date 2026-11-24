@@ -11,7 +11,7 @@ publish = false
 termax-term.workspace = true
 termax-ssh.workspace = true
 termax-sshd-fixture.workspace = true
-tokio = { version = "1", features = ["rt-multi-thread", "signal"] }
+tokio = { version = "1", features = ["rt-multi-thread", "signal", "macros"] }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 memory-stats = "1"
