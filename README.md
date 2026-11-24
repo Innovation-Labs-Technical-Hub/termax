@@ -28,6 +28,12 @@ The design set (C4 architecture, BRD-00…13, module catalogue, mockups) lives o
 | `termax-sshd-fixture` | Throwaway unprivileged OpenSSH sshd for tests and the perf harness |
 | `xtask` | Perf harness (`cargo xtask perf`) and `cargo xtask sshd` |
 
+## Specs and principles
+
+- Requirements: [`openspec/`](openspec/) — 14 capability specs generated from the BRDs, active changes, and a bilingual glossary; workflow in [`openspec/AGENTS.md`](openspec/AGENTS.md).
+- Engineering rules: [`.principles/`](.principles/README.md) — Rust conventions, security, testing and performance, agentic coding.
+- Agents and contributors start at [`AGENTS.md`](AGENTS.md).
+
 ## Develop
 
 Tasks are in the [`justfile`](justfile); `make <recipe>` forwards to the same recipes (`make test ARGS=termax-ssh`).
