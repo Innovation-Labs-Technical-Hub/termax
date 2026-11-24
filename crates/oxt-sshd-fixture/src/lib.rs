@@ -46,6 +46,37 @@ pub fn keygen(path: &Path, passphrase: &str) {
     assert!(st.success(), "ssh-keygen failed");
 }
 
+/// (major, minor) of the installed OpenSSH, from `sshd -V` (e.g. `OpenSSH_9.6p1`).
+fn openssh_version() -> Option<(u32, u32)> {
+    let out = Command::new(SSHD).arg("-V").output().ok()?;
+    let text = String::from_utf8_lossy(&out.stderr) + String::from_utf8_lossy(&out.stdout);
+    parse_openssh_version(&text)
+}
+
+fn parse_openssh_version(text: &str) -> Option<(u32, u32)> {
+    let rest = &text[text.find("OpenSSH_")? + "OpenSSH_".len()..];
+    let mut parts = rest.split(|c: char| !c.is_ascii_digit());
+    Some((parts.next()?.parse().ok()?, parts.next()?.parse().ok()?))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_openssh_version;
+
+    #[test]
+    fn parses_openssh_version_strings() {
+        assert_eq!(
+            parse_openssh_version("OpenSSH_10.2p1 Ubuntu-2ubuntu3.8, OpenSSL 3.5.5"),
+            Some((10, 2))
+        );
+        assert_eq!(
+            parse_openssh_version("OpenSSH_9.6p1 Ubuntu-3ubuntu13"),
+            Some((9, 6))
+        );
+        assert_eq!(parse_openssh_version("unknown option -- V"), None);
+    }
+}
+
 pub fn pubkey_line(priv_path: &Path) -> String {
     std::fs::read_to_string(priv_path.with_extension("pub")).expect("read .pub")
 }
@@ -110,7 +141,7 @@ impl Sshd {
 
     fn write_config(&self) -> PathBuf {
         let d = self.dir.path().display();
-        let cfg = format!(
+        let mut cfg = format!(
             "Port {port}\n\
              ListenAddress 127.0.0.1\n\
              HostKey {d}/host_key\n\
@@ -121,10 +152,14 @@ impl Sshd {
              PasswordAuthentication no\n\
              KbdInteractiveAuthentication no\n\
              AllowTcpForwarding yes\n\
-             PerSourcePenalties no\n\
              LogLevel VERBOSE\n",
             port = self.port
         );
+        // Tests deliberately fail auth and reconnect quickly; OpenSSH 9.8+
+        // would penalise that. Older sshd rejects the unknown keyword.
+        if openssh_version().is_some_and(|v| v >= (9, 8)) {
+            cfg.push_str("PerSourcePenalties no\n");
+        }
         let path = self.dir.path().join("sshd_config");
         std::fs::write(&path, cfg).expect("sshd_config");
         path
