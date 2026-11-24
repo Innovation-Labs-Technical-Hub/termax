@@ -33,9 +33,27 @@ pub fn run() -> Result<()> {
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?
-        .block_on(tokio::signal::ctrl_c())
-        .context("waiting for Ctrl-C")?;
+        .block_on(stop_signal())
+        .context("waiting for a stop signal")?;
+    // Dropping the fixture kills sshd and removes its temporary key directory.
     drop(sshd);
     println!("\nsshd stopped.");
     Ok(())
+}
+
+/// Wait for Ctrl-C, or on Unix also SIGTERM (e.g. `timeout`, process
+/// managers), so cleanup runs either way.
+async fn stop_signal() -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+        tokio::select! {
+            r = tokio::signal::ctrl_c() => r,
+            _ = term.recv() => Ok(()),
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        tokio::signal::ctrl_c().await
+    }
 }

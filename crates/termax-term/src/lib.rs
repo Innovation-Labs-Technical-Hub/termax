@@ -7,9 +7,10 @@
 //! renderer (GPU desktop, Flutter mobile, ...) refreshes its frame with
 //! [`TermCore::snapshot`] at vsync and repaints only the rows in [`Damage`].
 //!
-//! The crate is renderer-agnostic and depends on no UI toolkit. The only
-//! backend today is [`AlacrittyTerm`]; [`TermCore`] is object-safe so another
-//! emulator can be swapped in behind `Box<dyn TermCore>`.
+//! The crate is renderer-agnostic and depends on no UI toolkit. It ships the
+//! [`AlacrittyTerm`] backend; the Ghostty backend (the default on Linux) lives
+//! in `termax-term-ghostty`. [`TermCore`] is object-safe so backends are
+//! swapped behind `Box<dyn TermCore>`.
 
 mod alacritty;
 pub mod input;

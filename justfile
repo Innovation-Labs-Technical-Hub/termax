@@ -149,8 +149,9 @@ spec-import brd_yaml_dir:
 # ── Playground ──────────────────────────────────────────────────────────────
 
 # Run the tmx CLI: `just tmx policy check "rm -rf /"`
+[positional-arguments]
 tmx *args:
-    cargo run -q -p termax-cli -- {{args}}
+    cargo run -q -p termax-cli -- "$@"
 
 # Ask the agent policy about a command: `just policy "sudo rm -rf /" prod`
 policy command env="none":
@@ -167,9 +168,10 @@ demo-init:
     -just demo import known-hosts
 
 # Run any tmx command against the demo vault: `just demo hosts list`
+[positional-arguments]
 demo *args:
     TMX_VAULT_PASSWORD='{{demo_password}}' TMX_SECRET_KEY="$(cat '{{demo_dir}}/secret-key')" \
-      cargo run -q -p termax-cli -- --db "{{demo_dir}}/vault.db" {{args}}
+      cargo run -q -p termax-cli -- --db "{{demo_dir}}/vault.db" "$@"
 
 # Start a throwaway OpenSSH sshd and print how to connect (Ctrl-C stops it)
 sshd:
