@@ -11,6 +11,7 @@ publish = false
 [dependencies]
 termax-term = { path = "../termax-term" }
 termax-term-ghostty-sys = { path = "../termax-term-ghostty-sys" }
+regex = "1"
 
 [dev-dependencies]
 memory-stats = "1"

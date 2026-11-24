@@ -105,12 +105,42 @@ impl Metric {
     }
 }
 
-/// Baseline values by metric name.
-pub fn load_baseline(path: &Path) -> Result<HashMap<String, f64>> {
+/// One harness run as written by `--json`.
+#[derive(Serialize, Deserialize)]
+pub struct Results {
+    /// Terminal backend the terminal metrics were measured on.
+    pub backend: String,
+    pub metrics: Vec<Metric>,
+}
+
+/// Backend assumed for baselines written before results recorded it; only
+/// alacritty_terminal existed then.
+const LEGACY_BACKEND: &str = "alacritty_terminal";
+
+/// A baseline run: its backend and values by metric name.
+pub struct Baseline {
+    pub backend: String,
+    pub values: HashMap<String, f64>,
+}
+
+pub fn load_baseline(path: &Path) -> Result<Baseline> {
     let raw = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
-    let metrics: Vec<Metric> =
-        serde_json::from_slice(&raw).with_context(|| format!("parsing {}", path.display()))?;
-    Ok(metrics.into_iter().map(|m| (m.name, m.value)).collect())
+    let results = match serde_json::from_slice::<Results>(&raw) {
+        Ok(r) => r,
+        Err(_) => Results {
+            backend: LEGACY_BACKEND.into(),
+            metrics: serde_json::from_slice(&raw)
+                .with_context(|| format!("parsing {}", path.display()))?,
+        },
+    };
+    Ok(Baseline {
+        backend: results.backend,
+        values: results
+            .metrics
+            .into_iter()
+            .map(|m| (m.name, m.value))
+            .collect(),
+    })
 }
 
 /// Outcome of a run.
@@ -189,6 +219,28 @@ mod tests {
                 .ungated()
                 .regressed(100.0, 0.10)
         );
+    }
+
+    #[test]
+    fn baselines_record_backend_and_accept_legacy_arrays() {
+        let dir = std::env::temp_dir().join(format!("xtask-baseline-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let m = Metric::higher("parser ascii", 150.0, "MB/s");
+
+        let legacy = dir.join("legacy.json");
+        std::fs::write(&legacy, serde_json::to_vec(&vec![m.clone()]).unwrap()).unwrap();
+        let b = load_baseline(&legacy).unwrap();
+        assert_eq!(b.backend, LEGACY_BACKEND);
+        assert_eq!(b.values["parser ascii"], 150.0);
+
+        let current = dir.join("current.json");
+        let results = Results {
+            backend: "libghostty-vt".into(),
+            metrics: vec![m],
+        };
+        std::fs::write(&current, serde_json::to_vec(&results).unwrap()).unwrap();
+        assert_eq!(load_baseline(&current).unwrap().backend, "libghostty-vt");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

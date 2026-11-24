@@ -22,8 +22,8 @@ The design set (C4 architecture, BRD-00…13, module catalogue, mockups) lives o
 | `termax-interop` | `~/.ssh/config` and `known_hosts` import, ssh_config export |
 | `termax-vault` | Encrypted local store (SQLite WAL + per-record XChaCha20-Poly1305, Argon2id + Secret Key) |
 | `termax-ssh` | SSH client facade over russh: strict KEX + ML-KEM, host-key trust, auth, multiplexed channels, `-L`, ProxyJump |
-| `termax-term` | `TermCore` terminal-core trait with the alacritty_terminal backend |
-| `termax-term-ghostty` (+ `-sys`) | Experimental `TermCore` backend on libghostty-vt; needs Zig 0.15.2, not a default member |
+| `termax-term` | `TermCore` terminal-core trait, shared input encoders, and the alacritty_terminal backend (kept for comparison and as a fallback) |
+| `termax-term-ghostty` (+ `-sys`) | Default `TermCore` backend on Linux, on libghostty-vt (Ghostty's terminal core); built with Zig 0.15.2. macOS and Windows use the alacritty backend until Ghostty's Zig build supports the macOS 26 SDK and Visual Studio 2026 |
 | `termax-cli` | The `tmx` command-line tool |
 | `termax-sshd-fixture` | Throwaway unprivileged OpenSSH sshd for tests and the perf harness |
 | `xtask` | Perf harness (`cargo xtask perf`) and `cargo xtask sshd` |
@@ -35,7 +35,7 @@ Tasks are in the [`justfile`](justfile); `make <recipe>` forwards to the same re
 ```sh
 just              # list recipes
 just doctor       # show toolchain versions (Rust, MSRV, sshd, Zig, cargo-deny)
-just setup        # rustup components, MSRV toolchain, cargo-deny
+just setup        # rustup components, MSRV toolchain, cargo-deny, Zig 0.15.2 (SHA-256 verified)
 just ci           # fmt check, clippy -D warnings, tests, cargo-deny — same as CI
 just test termax-ssh
 just perf         # terminal + SSH performance against the brief's targets
@@ -51,12 +51,11 @@ just demo hosts list
 just sshd                                     # throwaway sshd + ready-to-paste ssh command
 ```
 
-Ghostty backend:
+Terminal backends:
 
 ```sh
-just zig-install       # Zig 0.15.2 into ~/.local, SHA-256 verified
-just ghostty-test
-just ghostty-compare   # alacritty vs Ghostty numbers side by side
+just term-test          # both backends against the same expectations
+just compare-backends   # Ghostty vs alacritty numbers side by side
 ```
 
-Plain `cargo build`, `cargo test` and `cargo clippy` use the default workspace members, which skip the Zig-based crates; avoid `--workspace` unless Zig is installed. CI runs the same checks on Linux, Windows and macOS (amd64 and arm64), a separate Ghostty job, `cargo-deny` for the licence and advisory policy in `deny.toml`, and a perf job that fails on >10 % regressions against the PR's base commit.
+On Linux, building needs Zig 0.15.2 on `PATH` (`just zig-install`); on macOS and Windows the Ghostty crates are skipped by `just` and CI. The first build of the Ghostty backend in a fresh build directory clones Ghostty from GitHub at a pinned commit; set `GHOSTTY_SOURCE_DIR` to a local checkout of that commit to build offline. CI runs the same checks on Linux, Windows and macOS (amd64 and arm64), `cargo-deny` for the licence and advisory policy in `deny.toml`, and a perf job that fails on >10 % regressions against the PR's base commit (skipped when the base used a different terminal backend).

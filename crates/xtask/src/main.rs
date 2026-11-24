@@ -23,18 +23,25 @@ struct Cli {
 
 #[derive(Clone, Copy, ValueEnum)]
 enum Backend {
-    Alacritty,
-    /// Requires building xtask with `--features ghostty`.
-    #[cfg(feature = "ghostty")]
+    /// libghostty-vt; the default on Linux, where its Zig build works today.
+    #[cfg(target_os = "linux")]
     Ghostty,
+    /// alacritty_terminal; the default elsewhere and kept for comparison.
+    Alacritty,
 }
+
+/// The default terminal backend for this platform.
+#[cfg(target_os = "linux")]
+const DEFAULT_BACKEND: Backend = Backend::Ghostty;
+#[cfg(not(target_os = "linux"))]
+const DEFAULT_BACKEND: Backend = Backend::Alacritty;
 
 impl Backend {
     fn name(self) -> &'static str {
         match self {
-            Backend::Alacritty => "alacritty_terminal",
-            #[cfg(feature = "ghostty")]
+            #[cfg(target_os = "linux")]
             Backend::Ghostty => "libghostty-vt",
+            Backend::Alacritty => "alacritty_terminal",
         }
     }
 
@@ -43,7 +50,7 @@ impl Backend {
             Backend::Alacritty => {
                 |c: TermConfig| Box::new(AlacrittyTerm::new(c)) as Box<dyn TermCore>
             }
-            #[cfg(feature = "ghostty")]
+            #[cfg(target_os = "linux")]
             Backend::Ghostty => |c: TermConfig| {
                 Box::new(termax_term_ghostty::GhosttyTerm::new(c)) as Box<dyn TermCore>
             },
@@ -56,7 +63,7 @@ enum Command {
     /// Run the performance harness.
     Perf {
         /// Terminal core to measure.
-        #[arg(long, value_enum, default_value_t = Backend::Alacritty)]
+        #[arg(long, value_enum, default_value_t = DEFAULT_BACKEND)]
         backend: Backend,
         /// Also fail when a target from the architecture brief is missed.
         #[arg(long)]

@@ -130,24 +130,29 @@ files matches the `Cargo.lock` checksums Cargo used.
 
 ### Trait coverage
 
+Updated 2026-11-24 for the parity work on `feat/ghostty-default`. Behaviour is checked by
+`crates/termax-term-ghostty/tests/term_core.rs`: 42 tests, including every alacritty test for these features
+and 10 new shared tests that also run against alacritty in `crates/termax-term/tests/term_core.rs`.
+
 | `TermCore` item | Status |
 |---|---|
-| `feed` (byte and time budget, `consumed`) | Supported |
+| `feed` (byte and time budget, `consumed`) | Supported. Input passes through the shared `termax_term::osc_scan` pre-scanner and a small CSI watcher (ED/EL/RIS for the selection, XTWINOPS 22/23 for the title stack). Every byte still reaches Ghostty. ASCII throughput is 548–551 MB/s in release (two runs), down from 658–666 MB/s without the scanners. The scanner's new fast path also lifts alacritty from 144 to 171 MB/s. |
 | `drain_replies` | Supported. DA1 answers `CSI ?6c`, like alacritty; DSR 5/6, DECRQM and other replies are Ghostty's own. |
 | `input_modes`, `encode_key/mouse/paste/focus` | Supported, through `termax_term::input`. URXVT and SGR-pixel mouse encodings map to `Legacy`. |
-| `resize` (reflow, pixel size for `CSI 14 t`) | Supported |
+| `resize` (reflow, pixel size for `CSI 14 t`) | Supported. A width change drops the selection; a height change keeps it, as in alacritty. |
 | `scroll` (Up/Down/Page/Top/Bottom, anchored while scrolled back) | Supported |
-| `snapshot` (cells, colours, attributes, wide chars, graphemes, hyperlink flag, cursor, history, damage) | Supported. `BLINK` is now populated. `selection` is always `None`. |
-| `take_events`: `Bell`, `Title`, `Cwd` (OSC 7), `ClipboardStore`/`ClipboardStoreRequest` (policy and size cap applied) | Supported |
+| `snapshot` (cells, colours, attributes, wide chars, graphemes, hyperlink flag, cursor, history, damage, selection) | Supported. `Frame::selection` is clipped to the viewport exactly like alacritty. |
+| `take_events`: `Bell`, `Title`, `Cwd` (OSC 7), `ClipboardStore`/`ClipboardStoreRequest` (policy and size cap applied) | Supported. OSC 7 now comes from the shared scanner, so the `file://`/`kitty-shell-cwd://` parsing matches alacritty. |
+| `take_events`: `PromptMark` (OSC 133) | Supported, through the shared scanner. `cursor_line` is read after the preceding bytes are parsed. |
+| `take_events`: `ResetTitle`, title stack | Supported. The backend keeps alacritty's title stack (XTWINOPS 22/23, depth 4096), because Ghostty raises no event on a pop. A pop restores the saved title, or raises `ResetTitle` when none was set. An empty (after trimming) OSC 0/2 title also raises `ResetTitle`. **Differs from alacritty**, which reports an empty OSC 0/2 title as `Title("")`. |
 | `take_events`: `CursorStyle` | Partial. Raised at snapshot time, because the shape is only visible through the render state. |
-| `take_events`: `ResetTitle`, `PromptMark` (OSC 133) | Not yet. Ghostty has no callback for them. |
-| `memory_estimate` | Approximate. Ghostty does not expose page allocation; within 6% of RSS uncompressed, and it ignores compression. |
+| OSC 52 reads, `ClipboardLoadRequest`, `answer_clipboard_load` | Supported. The scanner is built with `with_clipboard_loads()` because Ghostty drops OSC 52 `?` itself. The default policy is `Deny`; with `Ask`, up to 16 requests stay pending. The reply is byte-identical to alacritty's, including the BEL or ST terminator of the request. |
+| `select`, `selection_text` | Supported, with alacritty's rules for char, word (escape chars and bracket matching), line and block selections, extend, clear, and copy text. Endpoints are Ghostty tracked references, so the selection follows its content through output, viewport scrolling and height changes. Like alacritty, it is dropped by ED/EL over its lines, ED 2, RIS, a screen switch, a width change, or its content scrolling away. Differences: insert/delete line and scroll regions leave the selection on its screen cells; a word or line range is fixed when made rather than re-expanded on every read. See below. |
+| `search` | Supported, with the `regex` crate over rows read through grid references. Rows that soft-wrap form one line; wide characters cover both cells; scrollback is included. Costs 24 ms for 10k × 80 history in release (alacritty: 6 ms). `^`/`$` anchor at logical line boundaries and graphemes are matched whole; alacritty's DFA walk honours `^` only at the top of the grid and ignores combining marks. |
+| `on_idle` (new trait method, default no-op) | Supported. Runs Ghostty's full scrollback compression: 6.65 → 0.54 MiB RSS per tab with `backend_compare` (6.55 → 0.43 MiB in a 20-tab test harness), about 1.1 ms for the first pass and 0.35 µs for a redundant one. Reads of compressed history (search, scrolling back) restore those pages, and the next idle pass compresses them again. On targets where Ghostty reports compression `Unsupported`, it does nothing. |
+| `memory_estimate` | Approximate, and does not reflect compression: Ghostty reports neither which pages are compressed nor their size, so it is an upper bound after `on_idle`. Within 6% of RSS uncompressed. |
 | `grapheme` | Supported. Graphemes are interned the same way as in the alacritty backend. |
-| `select`, `selection_text` | Not yet. The binding only offers pixel-driven selection gestures. Inert: no-op and `None`. |
-| `search` | Not yet. libghostty-vt 0.2 has no search API (`ghostty-vt` does). Always returns `Ok(vec![])`. |
-| OSC 52 reads, `answer_clipboard_load` | Not supported. lib-vt drops OSC 52 `?` itself, so reads never reach the embedder. |
 | Colour-query replies (OSC 10/11/4 `?`) | Supported. Ghostty answers from the configured palette, byte-identical to alacritty (tested). |
-| OSC 133 marks kept off the grid | Supported (tested). No events are raised; see `PromptMark` above. |
 
 ### Behaviour differences seen in the parity tests
 
@@ -157,6 +162,16 @@ files matches the `Cargo.lock` checksums Cargo used.
   history is kept and that it stays bounded.
 - `GhosttyTerm::new` returns `Self` and panics only if Ghostty cannot allocate. `GhosttyTerm::try_new` returns
   `Result`.
+- An empty OSC 0/2 title raises `ResetTitle`, as requested. alacritty raises `Title("")` and keeps
+  `ResetTitle` for a title-stack pop to no title.
+- Selection after insert/delete line (`CSI L`/`CSI M`) or a scroll-region scroll stays on its screen cells.
+  alacritty moves it with the text. Ghostty's tracked references stay on their rows in those operations.
+- Word and line selections are expanded once, when made or extended. alacritty re-expands them on every read;
+  doing that here would walk the grid through grid references on every frame.
+- Search anchors and combining marks are noted in the coverage table. alacritty's handling is a quirk of its DFA
+  walk, which the shared tests avoid.
+- Selection text does not collapse tabs. alacritty stores tab characters in cells and skips the blanks after them;
+  Ghostty does not store tabs.
 
 ## Plugging into `cargo xtask perf`
 
@@ -196,10 +211,8 @@ files matches the `Cargo.lock` checksums Cargo used.
     `GHOSTTY_ZIG_SYSTEM_DIR` for offline builds.
   - Until then, `cargo build --workspace` fails on a clean machine without Zig. Verified: in a fresh target
     directory with Zig removed from `PATH`, the build fails with `failed to execute zig build`.
-- **Feature gaps:** `TermCore` relies on selection, search, OSC 52 reads and OSC 133 events, and Ghostty does not
-  provide them yet. They would need either the newer API (`ghostty-vt`) or our own implementation:
-  - OSC 133 and OSC 52: a byte pre-scanner like `termax-term`'s private `osc_scan`.
-  - Selection and search: an extractor based on `grid_ref`.
+- **Feature gaps (resolved 2026-11-24):** selection, search, OSC 52 reads, OSC 133 marks, `ResetTitle` and the title stack are now implemented in Termax itself (`selection.rs`, `search.rs`, the shared `osc_scan` pre-scanner) and held to the same tests as the alacritty backend. Remaining differences are listed in the coverage table above.
+- **Platform support:** the Zig 0.15.2 build fails against the macOS 26 SDK and Visual Studio 2026; Ghostty is the default on Linux only, and macOS/Windows use alacritty until a newer Ghostty/Zig resolves it.
 
 ## Recommendation
 

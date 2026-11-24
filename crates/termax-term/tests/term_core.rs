@@ -16,6 +16,21 @@ fn term(cols: u16, rows: u16) -> AlacrittyTerm {
     })
 }
 
+fn term_without_scrollback(cols: u16, rows: u16) -> AlacrittyTerm {
+    AlacrittyTerm::new(TermConfig {
+        size: GridSize::new(cols, rows),
+        scrollback_lines: 0,
+        ..Default::default()
+    })
+}
+
+fn term_with_clipboard(clipboard: ClipboardPolicy) -> AlacrittyTerm {
+    AlacrittyTerm::new(TermConfig {
+        clipboard,
+        ..Default::default()
+    })
+}
+
 fn feed_all(t: &mut AlacrittyTerm, bytes: &[u8]) {
     let mut rest = bytes;
     while !rest.is_empty() {
@@ -646,4 +661,328 @@ fn memory_estimate_grows_with_scrollback() {
     let before = t.memory_estimate();
     feed_all(&mut t, &numbered_lines(0, 2_000));
     assert!(t.memory_estimate() > before);
+}
+
+fn select(t: &mut impl TermCore, row: u16, col: u16, kind: SelectionKind) {
+    t.select(SelectionOp::Start {
+        at: ViewportPoint::new(row, col),
+        kind,
+    });
+}
+
+fn extend(t: &mut impl TermCore, row: u16, col: u16) {
+    t.select(SelectionOp::Extend {
+        to: ViewportPoint::new(row, col),
+    });
+}
+
+#[test]
+fn selection_edges_follow_alacritty_rules() {
+    let mut t = term(20, 4);
+    feed_all(
+        &mut t,
+        b"f(a, [b]) x\r\nwrapped-word-goes-on-and-on\r\nhello",
+    );
+
+    // A char selection is empty until it is dragged.
+    select(&mut t, 0, 2, SelectionKind::Char);
+    assert_eq!(t.selection_text(), None);
+    let mut frame = Frame::default();
+    t.snapshot(&mut frame);
+    assert_eq!(frame.selection, None);
+    extend(&mut t, 0, 2);
+    assert_eq!(t.selection_text().as_deref(), Some("a"));
+    // Dragging backwards leaves the anchor cell out.
+    extend(&mut t, 0, 0);
+    assert_eq!(t.selection_text().as_deref(), Some("f("));
+
+    // A word selection on a bracket spans to its partner.
+    select(&mut t, 0, 1, SelectionKind::Word);
+    assert_eq!(t.selection_text().as_deref(), Some("(a, [b])"));
+    select(&mut t, 0, 7, SelectionKind::Word);
+    assert_eq!(t.selection_text().as_deref(), Some("[b]"));
+    // Words continue across a soft wrap.
+    select(&mut t, 1, 3, SelectionKind::Word);
+    assert_eq!(
+        t.selection_text().as_deref(),
+        Some("wrapped-word-goes-on-and-on")
+    );
+    // Extending a word selection snaps the far end to a word boundary too.
+    select(&mut t, 3, 2, SelectionKind::Word);
+    extend(&mut t, 0, 10);
+    assert_eq!(
+        t.selection_text().as_deref(),
+        Some("x\nwrapped-word-goes-on-and-on\nhello")
+    );
+    // A line selection covers the whole wrapped line.
+    select(&mut t, 2, 0, SelectionKind::Line);
+    assert_eq!(
+        t.selection_text().as_deref(),
+        Some("wrapped-word-goes-on-and-on\n")
+    );
+    t.snapshot(&mut frame);
+    let span = frame.selection.expect("span");
+    assert_eq!(
+        (span.start, span.end, span.block),
+        (ViewportPoint::new(1, 0), ViewportPoint::new(2, 19), false)
+    );
+    // A selection reaching the end of a row includes the newline.
+    select(&mut t, 0, 10, SelectionKind::Char);
+    extend(&mut t, 1, 19);
+    assert_eq!(
+        t.selection_text().as_deref(),
+        Some("x\nwrapped-word-goes-on")
+    );
+}
+
+#[test]
+fn selection_text_keeps_wide_chars_and_graphemes() {
+    let mut t = term(20, 3);
+    feed_all(&mut t, "a中e\u{301}b".as_bytes());
+    // Starting on the wide character's spacer still copies it.
+    select(&mut t, 0, 2, SelectionKind::Char);
+    extend(&mut t, 0, 4);
+    assert_eq!(t.selection_text().as_deref(), Some("中e\u{301}b"));
+    select(&mut t, 0, 3, SelectionKind::Word);
+    assert_eq!(t.selection_text().as_deref(), Some("a中e\u{301}b"));
+}
+
+#[test]
+fn selection_follows_its_content() {
+    let mut t = term(20, 5);
+    feed_all(&mut t, &numbered_lines(0, 10));
+    let mut frame = Frame::default();
+    t.snapshot(&mut frame);
+    assert_eq!(row_text(&t, &frame, 1), "line 7");
+    select(&mut t, 1, 0, SelectionKind::Line);
+    assert_eq!(t.selection_text().as_deref(), Some("line 7\n"));
+
+    // Scrolling the viewport moves the span with the content.
+    t.scroll(ViewportScroll::Up(2));
+    t.snapshot(&mut frame);
+    let span = frame.selection.expect("span");
+    assert_eq!((span.start.row, span.end.row), (3, 3));
+
+    // New output scrolls the selected line into history; it stays selected.
+    t.scroll(ViewportScroll::Bottom);
+    feed_all(&mut t, &numbered_lines(10, 20));
+    assert_eq!(t.selection_text().as_deref(), Some("line 7\n"));
+    t.snapshot(&mut frame);
+    assert_eq!(frame.selection, None, "selection is above the viewport");
+    t.scroll(ViewportScroll::Top);
+    t.scroll(ViewportScroll::Down(5));
+    t.snapshot(&mut frame);
+    assert_eq!(row_text(&t, &frame, 0), "line 5");
+    let span = frame.selection.expect("span");
+    assert_eq!(
+        (span.start, span.end),
+        (ViewportPoint::new(2, 0), ViewportPoint::new(2, 19))
+    );
+    // Extending while scrolled back works in viewport coordinates.
+    extend(&mut t, 3, 0);
+    assert_eq!(t.selection_text().as_deref(), Some("line 7\nline 8\n"));
+
+    // A selection partly above the viewport is clipped to its top row.
+    t.scroll(ViewportScroll::Down(3));
+    t.snapshot(&mut frame);
+    let span = frame.selection.expect("span");
+    assert_eq!(
+        (span.start, span.end),
+        (ViewportPoint::new(0, 0), ViewportPoint::new(0, 19))
+    );
+}
+
+#[test]
+fn selection_is_dropped_by_erase_screen_switch_and_width_change() {
+    let mut t = term(20, 5);
+    let setup = |t: &mut _| {
+        feed_all(t, b"\x1b[H\x1b[2Jone\r\ntwo\r\nthree");
+        select(t, 1, 0, SelectionKind::Line);
+        assert_eq!(t.selection_text().as_deref(), Some("two\n"));
+    };
+
+    // Erasing a line elsewhere or overprinting keeps it.
+    setup(&mut t);
+    feed_all(&mut t, b"\x1b[3;1H\x1b[2K\x1b[2;1HTW");
+    assert_eq!(t.selection_text().as_deref(), Some("TWo\n"));
+    // Erasing the selected line drops it.
+    feed_all(&mut t, b"\x1b[2;2H\x1b[K");
+    assert_eq!(t.selection_text(), None);
+
+    setup(&mut t);
+    feed_all(&mut t, b"\x1b[5;1H\x1b[1J");
+    assert_eq!(t.selection_text(), None, "ED 1 above the cursor");
+
+    setup(&mut t);
+    feed_all(&mut t, b"\x1b[4;1H\x1b[J");
+    assert_eq!(t.selection_text().as_deref(), Some("two\n"), "ED 0 below");
+    feed_all(&mut t, b"\x1b[2J");
+    assert_eq!(t.selection_text(), None, "ED 2");
+
+    setup(&mut t);
+    feed_all(&mut t, b"\x1b[?1049h");
+    assert_eq!(t.selection_text(), None, "alternate screen");
+    feed_all(&mut t, b"\x1b[?1049l");
+    assert_eq!(t.selection_text(), None);
+
+    setup(&mut t);
+    feed_all(&mut t, b"\x1bc");
+    assert_eq!(t.selection_text(), None, "reset");
+
+    setup(&mut t);
+    t.resize(GridSize::new(20, 8));
+    assert_eq!(t.selection_text().as_deref(), Some("two\n"), "height only");
+    t.resize(GridSize::new(30, 8));
+    assert_eq!(t.selection_text(), None, "width change");
+}
+
+#[test]
+fn search_joins_wrapped_rows_and_maps_wide_chars() {
+    let mut t = term(10, 4);
+    feed_all(&mut t, "abcdefghijKLM\r\n中文x e\u{301}z".as_bytes());
+    let at = |line, col| termax_term::GridPoint { line, col };
+
+    let hits = t.search(&SearchQuery::new("jK")).unwrap();
+    assert_eq!(hits.len(), 1);
+    assert_eq!((hits[0].start, hits[0].end), (at(0, 9), at(1, 0)));
+
+    // A wide character covers both of its cells.
+    let hits = t.search(&SearchQuery::new("文x")).unwrap();
+    assert_eq!((hits[0].start, hits[0].end), (at(2, 2), at(2, 4)));
+    let hits = t.search(&SearchQuery::new("中")).unwrap();
+    assert_eq!((hits[0].start, hits[0].end), (at(2, 0), at(2, 1)));
+    let hits = t.search(&SearchQuery::new("z")).unwrap();
+    assert_eq!((hits[0].start, hits[0].end), (at(2, 7), at(2, 7)));
+
+    // Blank cells read as spaces up to the last column; hard line breaks end
+    // a match.
+    let hits = t.search(&SearchQuery::new("M {7}")).unwrap();
+    assert_eq!((hits[0].start, hits[0].end), (at(1, 2), at(1, 9)));
+    assert!(t.search(&SearchQuery::new("M {8}")).unwrap().is_empty());
+    assert!(t.search(&SearchQuery::new("M.*中")).unwrap().is_empty());
+    // Empty matches are skipped.
+    assert!(t.search(&SearchQuery::new("q*")).unwrap().is_empty());
+}
+
+#[test]
+fn osc52_load_requests_are_capped_and_keep_their_terminator() {
+    let mut t = term(20, 5);
+    t.select(SelectionOp::Clear);
+    let mut ask = term_with_clipboard(ClipboardPolicy {
+        load: ClipboardLoadMode::Ask,
+        ..Default::default()
+    });
+    for _ in 0..17 {
+        feed_all(&mut ask, b"\x1b]52;c;?\x07");
+    }
+    feed_all(&mut ask, b"\x1b]52;s;?\x1b\\");
+    let ids: Vec<u64> = events(&mut ask)
+        .into_iter()
+        .filter_map(|e| match e {
+            TermEvent::ClipboardLoadRequest { id, .. } => Some(id),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(ids.len(), 18);
+    // Only the 16 most recent requests can still be answered.
+    ask.answer_clipboard_load(ids[0], Some("x"));
+    ask.answer_clipboard_load(ids[1], Some("x"));
+    assert!(replies(&mut ask).is_empty());
+    ask.answer_clipboard_load(ids[2], None);
+    assert!(replies(&mut ask).is_empty(), "refusal sends nothing");
+    ask.answer_clipboard_load(ids[17], Some("hi"));
+    assert_eq!(replies(&mut ask), b"\x1b]52;s;aGk=\x1b\\");
+}
+
+#[test]
+fn on_idle_keeps_content_selection_and_search() {
+    let mut t = term(80, 24);
+    feed_all(&mut t, b"needle in history\r\n");
+    feed_all(&mut t, &numbered_lines(0, 3_000));
+    select(&mut t, 0, 0, SelectionKind::Line);
+    let selected = t.selection_text();
+    let mut before = Frame::default();
+    t.snapshot(&mut before);
+    t.on_idle();
+    t.on_idle();
+    let mut after = before.clone();
+    let damage = t.snapshot(&mut after);
+    assert!(damage.rows.iter().all(|r| before.rows[r] == after.rows[r]));
+    assert_eq!(after.rows, before.rows);
+    assert_eq!(after.selection, before.selection);
+    assert_eq!(t.selection_text(), selected);
+    let hits = t.search(&SearchQuery::new("needle")).unwrap();
+    assert_eq!(hits.len(), 1);
+    assert!(hits[0].start.line < 0);
+    t.scroll(ViewportScroll::Top);
+    t.snapshot(&mut after);
+    assert_eq!(row_text(&t, &after, 0), "needle in history");
+    feed_all(&mut t, b"more\r\n");
+    t.scroll(ViewportScroll::Bottom);
+    t.snapshot(&mut after);
+    assert_eq!(row_text(&t, &after, 22), "more");
+}
+
+#[test]
+fn selection_ends_when_its_content_leaves_the_scrollback() {
+    let mut t = term_without_scrollback(20, 5);
+    feed_all(&mut t, b"first\r\n");
+    select(&mut t, 0, 0, SelectionKind::Line);
+    assert_eq!(t.selection_text().as_deref(), Some("first\n"));
+    feed_all(&mut t, &numbered_lines(0, 10));
+    assert_eq!(t.selection_text(), None);
+    let mut frame = Frame::default();
+    t.snapshot(&mut frame);
+    assert_eq!(frame.selection, None);
+    // Extending a selection whose anchor is gone starts it at the first cell.
+    select(&mut t, 0, 2, SelectionKind::Char);
+    feed_all(&mut t, &numbered_lines(0, 10));
+    extend(&mut t, 0, 3);
+    assert_eq!(t.selection_text().as_deref(), Some("line"));
+
+    // Partly scrolled off: the start is clamped to the top row, as alacritty
+    // clamps it to the top of the scrolled region.
+    feed_all(&mut t, b"\x1b[H\x1b[2Jaa bb\r\ncc dd\r\nee");
+    select(&mut t, 0, 3, SelectionKind::Char);
+    extend(&mut t, 1, 1);
+    assert_eq!(t.selection_text().as_deref(), Some("bb\ncc"));
+    feed_all(&mut t, b"\x1b[5;1H\n");
+    assert_eq!(t.selection_text().as_deref(), Some("cc"));
+    t.snapshot(&mut frame);
+    let span = frame.selection.expect("span");
+    assert_eq!(
+        (span.start, span.end),
+        (ViewportPoint::new(0, 0), ViewportPoint::new(0, 1))
+    );
+}
+
+#[test]
+fn alternate_screen_selection_ends_when_scrolled_off() {
+    let mut t = term(20, 5);
+    feed_all(&mut t, b"\x1b[?1049hfirst\r\nsecond");
+    select(&mut t, 1, 0, SelectionKind::Word);
+    assert_eq!(t.selection_text().as_deref(), Some("second"));
+    feed_all(&mut t, b"\x1b[5;1H\n");
+    assert_eq!(t.selection_text().as_deref(), Some("second"), "moved up");
+    feed_all(&mut t, b"\n");
+    assert_eq!(t.selection_text(), None);
+}
+
+#[test]
+fn title_stack_push_and_pop() {
+    let mut t = term(20, 3);
+    let input = b"\x1b[22;0t\x1b]2;a\x07\x1b[22;0t\x1b]2;b\x07\x1b[23;0t\x1b[23;0t\x1b[23;0t";
+    for chunk in input.chunks(4) {
+        feed_all(&mut t, chunk);
+    }
+    assert_eq!(
+        events(&mut t),
+        vec![
+            TermEvent::Title("a".into()),
+            TermEvent::Title("b".into()),
+            TermEvent::Title("a".into()),
+            TermEvent::ResetTitle,
+        ],
+        "a pop restores the saved title; an empty stack ignores it"
+    );
 }

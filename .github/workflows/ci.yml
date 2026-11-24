@@ -16,32 +16,32 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      # The Ghostty terminal backend (default on Linux) is built with Zig. Zig
+      # 0.15.2 cannot yet build it against the macOS 26 SDK or Visual Studio
+      # 2026's C++ library, so other platforms use the alacritty backend.
+      - uses: mlugg/setup-zig@v2
+        if: runner.os == 'Linux'
+        with:
+          version: 0.15.2
+      - name: Select crates
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            echo "CRATES=--workspace" >> "$GITHUB_ENV"
+          else
+            echo "CRATES=--workspace --exclude termax-term-ghostty --exclude termax-term-ghostty-sys" >> "$GITHUB_ENV"
+          fi
       - name: Prepare sshd for interop tests
         if: runner.os == 'Linux'
         run: |
           [ -x /usr/sbin/sshd ] || { sudo apt-get update && sudo apt-get install -y openssh-server; }
           # Ubuntu's sshd refuses to start without its privilege-separation directory.
           sudo mkdir -p /run/sshd
-      # Default members only: the Ghostty backend needs Zig and has its own job.
       - run: cargo fmt --all --check
-      - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo test
-  ghostty:
-    # Experimental backend; built on Linux only until other platforms are verified.
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-      - uses: Swatinem/rust-cache@v2
-      - uses: mlugg/setup-zig@v2
-        with:
-          version: 0.15.2
-      - run: cargo clippy -p termax-term-ghostty -p termax-term-ghostty-sys --all-targets -- -D warnings
-      - run: cargo test -p termax-term-ghostty
-      - name: Backend comparison (report only)
-        run: cargo run --release -p xtask --features ghostty -- perf --no-ssh --backend ghostty
+      - run: cargo clippy ${{ env.CRATES }} --all-targets -- -D warnings
+        shell: bash
+      - run: cargo test ${{ env.CRATES }}
+        shell: bash
   deny:
     runs-on: ubuntu-24.04
     steps:
@@ -60,6 +60,9 @@ jobs:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
       - name: Prepare sshd for SSH measurements
         run: |
           [ -x /usr/sbin/sshd ] || { sudo apt-get update && sudo apt-get install -y openssh-server; }

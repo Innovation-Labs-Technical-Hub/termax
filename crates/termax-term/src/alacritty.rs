@@ -249,6 +249,9 @@ impl AlacrittyTerm {
                 cursor_line: u16::try_from(self.term.grid().cursor.point.line.0.max(0))
                     .unwrap_or(u16::MAX),
             },
+            // Never reported: this scanner is not built `with_clipboard_loads`
+            // because vte hands OSC 52 reads to `Term` itself.
+            OscEvent::ClipboardLoad(_) => return,
         };
         self.events.push(event);
     }

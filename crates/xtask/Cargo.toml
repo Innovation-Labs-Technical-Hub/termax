@@ -11,7 +11,6 @@ publish = false
 termax-term.workspace = true
 termax-ssh.workspace = true
 termax-sshd-fixture.workspace = true
-termax-term-ghostty = { path = "../termax-term-ghostty", optional = true }
 tokio = { version = "1", features = ["rt-multi-thread", "signal"] }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
@@ -19,9 +18,10 @@ memory-stats = "1"
 serde.workspace = true
 serde_json = "1"
 
-[features]
-# Adds `--backend ghostty`; needs Zig 0.15.2 on PATH.
-ghostty = ["dep:termax-term-ghostty"]
+# Ghostty's Zig build currently works on Linux only (Zig 0.15.2 cannot link
+# against the macOS 26 SDK or compile with Visual Studio 2026's C++ library).
+[target.'cfg(target_os = "linux")'.dependencies]
+termax-term-ghostty.workspace = true
 
 [lints]
 workspace = true
