@@ -13,7 +13,7 @@
 
 mod alacritty;
 pub mod input;
-mod osc_scan;
+pub mod osc_scan;
 mod palette;
 mod types;
 
@@ -87,4 +87,10 @@ pub trait TermCore: Send + 'static {
 
     /// Rough number of bytes held by the grid, scrollback and side tables.
     fn memory_estimate(&self) -> usize;
+
+    /// Called by the session's parser task after output has been quiet for a
+    /// while. Backends may compact memory here (for example compress
+    /// scrollback); this must not change visible content, scrollback, the
+    /// selection or search results. The default does nothing.
+    fn on_idle(&mut self) {}
 }

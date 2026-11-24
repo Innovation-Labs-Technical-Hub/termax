@@ -17,11 +17,13 @@
 //!   build. The default allocator is libc `malloc`, which is thread-safe.
 //!   Ghostty's own search thread is not used through this API.
 //! * Nothing escapes. Every `!Send` handle that refers to the terminal is a
-//!   private field; the `Rc` cells shared with the registered callbacks are
-//!   cloned only into those callbacks, which the terminal owns, so all clones
-//!   move together. Public methods hand out borrows tied to `&self`/`&mut self`
-//!   and plain-data copies only; no method returns an owned Ghostty handle or
-//!   lets callers register their own callbacks.
+//!   private field: the render state, the iterators and the tracked grid
+//!   references behind [`Vt::set_mark`]. The `Rc` cells shared with the
+//!   registered callbacks are cloned only into those callbacks, which the
+//!   terminal owns, so all clones move together. Public methods hand out
+//!   borrows tied to `&self`/`&mut self` and plain-data copies only; no method
+//!   returns an owned Ghostty handle or lets callers register their own
+//!   callbacks.
 //!
 //! This is the only crate of the Ghostty backend that contains `unsafe`.
 
@@ -30,12 +32,14 @@ use std::rc::Rc;
 
 pub use libghostty_vt as vt;
 
+use vt::error::Error;
 use vt::error::Result;
 use vt::render::{CellIteration, CellIterator, Dirty, RowIteration, RowIterator, Snapshot};
+use vt::screen::{CellContentTag, CellWide, TrackedGridRef};
 use vt::style::{Palette, RgbColor};
 use vt::terminal::{
-    ClipboardLocation, CompressionMode, CompressionResult, DeviceAttributes, Mode, Options,
-    ScrollViewport, Scrollbar, SizeReportSize,
+    ClipboardLocation, CompressionMode, CompressionResult, DeviceAttributes, Mode, Options, Point,
+    PointCoordinate, PointSpace, ScrollViewport, Scrollbar, SizeReportSize,
 };
 use vt::{RenderState, Terminal};
 
@@ -53,11 +57,9 @@ pub struct Effects {
 pub enum Effect {
     /// BEL.
     Bell,
-    /// The title changed (OSC 0/2); carries the new title.
+    /// The title changed (OSC 0/2, title stack pop); carries the new title,
+    /// empty when it was reset.
     Title(String),
-    /// The working directory changed (OSC 7 and friends); carries Ghostty's
-    /// stored value, which for OSC 7 is the URL as sent.
-    Pwd(String),
     /// The host wrote to a clipboard (OSC 52 store). Reads are never reported:
     /// Ghostty ignores OSC 52 `?` requests in lib-vt.
     ClipboardWrite {
@@ -83,10 +85,47 @@ pub struct VtOptions {
     pub device_attributes: DeviceAttributes,
 }
 
+/// Number of tracked positions a [`Vt`] holds; see [`Vt::set_mark`].
+pub const MARKS: usize = 3;
+
+/// Where one cell's text lives inside [`RowText::text`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CellSpan {
+    /// Byte offset of the cell's first character.
+    pub start: usize,
+    /// Byte offset just past the cell's text; equal to `start` for a blank cell.
+    pub end: usize,
+    /// Width class: wide cells are followed by a `SpacerTail`; a `SpacerHead`
+    /// pads the last column when a wide character wrapped to the next row.
+    pub wide: CellWide,
+}
+
+/// Plain-data copy of one row, filled by [`Vt::read_row`].
+#[derive(Clone, Debug, Default)]
+pub struct RowText {
+    /// Text of every cell with text, in column order (graphemes complete).
+    pub text: String,
+    /// One entry per column.
+    pub cells: Vec<CellSpan>,
+    /// The row soft-wraps onto the next one.
+    pub wrapped: bool,
+    scratch: Vec<char>,
+}
+
+impl RowText {
+    /// Text of column `col`; empty for blank cells, spacers and out-of-range columns.
+    pub fn cell_text(&self, col: usize) -> &str {
+        self.cells
+            .get(col)
+            .map_or("", |c| &self.text[c.start..c.end])
+    }
+}
+
 /// One libghostty-vt terminal plus its render state, movable across threads.
 pub struct Vt {
-    // Field order is drop order: iterators and render state reference data the
-    // terminal produced, so they are released before it.
+    // Field order is drop order: iterators, render state and tracked
+    // references point at data the terminal owns, so they are released first.
+    marks: [Option<TrackedGridRef>; MARKS],
     cells: CellIterator<'static>,
     rows: RowIterator<'static>,
     render: RenderState<'static>,
@@ -127,11 +166,6 @@ impl Vt {
             fx.borrow_mut().events.push(Effect::Title(title));
         })?;
         let fx = Rc::clone(&effects);
-        term.on_pwd_changed(move |t| {
-            let pwd = t.pwd().unwrap_or_default().to_owned();
-            fx.borrow_mut().events.push(Effect::Pwd(pwd));
-        })?;
-        let fx = Rc::clone(&effects);
         term.on_clipboard_write(move |_, write| {
             let text = write
                 .contents()
@@ -150,6 +184,7 @@ impl Vt {
         term.on_size(move |_| size.get())?;
 
         Ok(Self {
+            marks: Default::default(),
             cells: CellIterator::new()?,
             rows: RowIterator::new()?,
             render: RenderState::new()?,
@@ -240,6 +275,85 @@ impl Vt {
     /// Runs one step (or a full pass) of idle scrollback compression.
     pub fn compress(&mut self, mode: CompressionMode) -> Result<CompressionResult> {
         self.term.compress(mode)
+    }
+
+    /// Converts `point` into the coordinate `space`; `None` when the cell is
+    /// not representable there (e.g. history in viewport space).
+    pub fn convert(&self, point: Point, space: PointSpace) -> Result<Option<PointCoordinate>> {
+        let grid_ref = self.term.grid_ref(point)?;
+        self.term.point_from_grid_ref(&grid_ref, space)
+    }
+
+    /// Starts tracking the cell at `point` in slot `mark` (below [`MARKS`]).
+    ///
+    /// A mark follows its cell through output, scrolling, scrollback pruning
+    /// and reflow, and loses its value when the cell is discarded (pruned,
+    /// reset). It belongs to the screen that was active when it was set.
+    pub fn set_mark(&mut self, mark: usize, point: Point) -> Result<()> {
+        let slot = self.marks.get_mut(mark).ok_or(Error::InvalidValue)?;
+        match slot {
+            Some(tracked) => {
+                tracked.set(&mut self.term, point)?;
+            }
+            None => *slot = Some(self.term.track_grid_ref(point)?),
+        }
+        Ok(())
+    }
+
+    /// Stops tracking every mark.
+    pub fn clear_marks(&mut self) {
+        self.marks = Default::default();
+    }
+
+    /// Current position of `mark` in `space`; `None` if unset, lost or not
+    /// representable in `space`.
+    pub fn mark(&self, mark: usize, space: PointSpace) -> Result<Option<PointCoordinate>> {
+        match self.marks.get(mark).ok_or(Error::InvalidValue)? {
+            Some(tracked) => tracked.point(space),
+            None => Ok(None),
+        }
+    }
+
+    /// Copies the text and cell layout of screen row `y` (0 is the oldest
+    /// history row) into `out`.
+    ///
+    /// Uses grid references, one lookup per cell: fine for selection and
+    /// search, too slow for rendering.
+    pub fn read_row(&self, y: u32, out: &mut RowText) -> Result<()> {
+        out.text.clear();
+        out.cells.clear();
+        let cols = self.term.cols()?;
+        let at = |x| Point::Screen(PointCoordinate { x, y });
+        out.wrapped = self.term.grid_ref(at(0))?.row()?.is_wrapped()?;
+        for x in 0..cols {
+            let grid_ref = self.term.grid_ref(at(x))?;
+            let cell = grid_ref.cell()?;
+            let start = out.text.len();
+            if cell.has_text()? {
+                if cell.content_tag()? == CellContentTag::CodepointGrapheme {
+                    let len = loop {
+                        match grid_ref.graphemes(&mut out.scratch) {
+                            Ok(len) => break len,
+                            Err(Error::OutOfSpace { required }) if required > out.scratch.len() => {
+                                out.scratch.resize(required, '\0');
+                            }
+                            Err(e) => return Err(e),
+                        }
+                    };
+                    out.text.extend(&out.scratch[..len]);
+                } else {
+                    let cp = cell.codepoint()?;
+                    out.text
+                        .push(char::from_u32(cp).unwrap_or(char::REPLACEMENT_CHARACTER));
+                }
+            }
+            out.cells.push(CellSpan {
+                start,
+                end: out.text.len(),
+                wide: cell.wide()?,
+            });
+        }
+        Ok(())
     }
 
     /// Refreshes the render state and visits rows.

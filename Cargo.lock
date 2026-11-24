@@ -2429,6 +2429,7 @@ name = "termax-term-ghostty"
 version = "0.1.0"
 dependencies = [
  "memory-stats",
+ "regex",
  "termax-term",
  "termax-term-ghostty-sys",
 ]
