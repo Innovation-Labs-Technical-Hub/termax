@@ -113,6 +113,7 @@ impl Resolved {
 mod tests {
     use super::*;
 
+    /// Verifies: FR-CO08-009 specified behaviour
     #[test]
     fn most_specific_layer_wins_and_provenance_is_kept() {
         let app: Settings = [("font_size", "13"), ("keepalive", "30"), ("user", "root")]

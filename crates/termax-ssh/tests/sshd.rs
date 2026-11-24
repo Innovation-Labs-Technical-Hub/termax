@@ -28,6 +28,7 @@ macro_rules! sshd_or_skip {
     };
 }
 
+/// Verifies: FR-CO02-003 acceptance 1
 #[tokio::test(flavor = "multi_thread")]
 async fn publickey_exec_and_negotiated_algorithms() {
     let sshd = sshd_or_skip!();
@@ -170,6 +171,7 @@ async fn concurrent_channels_share_one_connection() {
     .await;
 }
 
+/// Verifies: FR-CO02-011 specified behaviour
 #[tokio::test(flavor = "multi_thread")]
 async fn unknown_host_key_reject_accept_once_and_save() {
     let sshd = sshd_or_skip!();
@@ -217,6 +219,7 @@ async fn unknown_host_key_reject_accept_once_and_save() {
     .await;
 }
 
+/// Verifies: FR-CO02-011 acceptance 1
 #[tokio::test(flavor = "multi_thread")]
 async fn changed_host_key_always_aborts() {
     let mut sshd = sshd_or_skip!();
@@ -313,6 +316,7 @@ async fn local_forward_round_trips_and_stops() {
     .await;
 }
 
+/// Verifies: FR-CO02-012 specified behaviour
 #[tokio::test(flavor = "multi_thread")]
 async fn proxy_jump_verifies_each_hop() {
     let sshd = sshd_or_skip!();
@@ -499,6 +503,7 @@ async fn encrypted_key_uses_passphrase_prompt() {
     .await;
 }
 
+/// Verifies: FR-CO03-009 acceptance 1
 #[tokio::test(flavor = "multi_thread")]
 async fn keepalive_misses_mark_connection_dead() {
     let sshd = sshd_or_skip!();

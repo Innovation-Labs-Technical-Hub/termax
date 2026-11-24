@@ -79,6 +79,7 @@ fn trait_is_object_safe_and_send() {
     assert_eq!(fed.consumed, 2);
 }
 
+/// Verifies: FR-CO04-002 acceptance 3
 #[test]
 fn feed_honours_byte_budget() {
     let mut t = term(80, 24);
@@ -101,6 +102,7 @@ fn feed_honours_byte_budget() {
     assert_eq!(fed.consumed, 9_000);
 }
 
+/// Verifies: FR-CO04-002 acceptance 3
 #[test]
 fn feed_honours_time_budget_between_chunks() {
     let mut t = term(80, 24);
@@ -843,6 +845,7 @@ fn selection_is_dropped_by_erase_screen_switch_and_width_change() {
     assert_eq!(t.selection_text(), None, "width change");
 }
 
+/// Verifies: FR-CO04-012 acceptance 2
 #[test]
 fn search_joins_wrapped_rows_and_maps_wide_chars() {
     let mut t = term(10, 4);
