@@ -1,6 +1,6 @@
 ---
 title: "Phase 1: Owner Decisions and Repository Governance"
-status: todo
+status: in-progress
 priority: P1
 effort: "1–2 weeks elapsed (owner time)"
 dependencies: []
@@ -30,7 +30,8 @@ Owner: Product owner + Tech lead · Priority: P1 · Effort: 1–2 weeks elapsed 
 
 ## Todo
 
-- [ ] Decision pack written and reviewed
+- [x] Decision pack written (`plans/reports/decision-pack-261124-1824-owner-decisions.md`)
+- [ ] Decision pack reviewed by owners
 - [ ] D1 (UI framework) decided or bake-off scheduled (phase 11)
 - [ ] D4, D5, D6, D7, D8, D9 decided
 - [ ] Quiet period for FR-CO01-011 decided
