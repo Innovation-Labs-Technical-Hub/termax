@@ -251,17 +251,16 @@ impl VaultStore {
         let mut out = Vec::with_capacity(rows.len());
         for row in rows {
             let host = self.decode_host(row)?;
-            if let Some(t) = &text {
-                if !host.label.to_lowercase().contains(t.as_str())
-                    && !host.address.to_lowercase().contains(t.as_str())
-                {
-                    continue;
-                }
+            if let Some(t) = &text
+                && !host.label.to_lowercase().contains(t.as_str())
+                && !host.address.to_lowercase().contains(t.as_str())
+            {
+                continue;
             }
-            if let Some(tag) = &filter.tag {
-                if !host.has_tag(tag) {
-                    continue;
-                }
+            if let Some(tag) = &filter.tag
+                && !host.has_tag(tag)
+            {
+                continue;
             }
             out.push(host);
         }
