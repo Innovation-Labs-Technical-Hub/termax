@@ -1,0 +1,19 @@
+[package]
+name = "termax-term-ghostty"
+description = "Experimental Termax TermCore backend on Ghostty's terminal core (libghostty-vt); needs Zig 0.15.2 on PATH to build"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+# libghostty-vt 0.2 requires Rust 1.90; the workspace baseline is 1.89.
+rust-version = "1.90"
+publish = false
+
+[dependencies]
+termax-term = { path = "../termax-term" }
+termax-term-ghostty-sys = { path = "../termax-term-ghostty-sys" }
+
+[dev-dependencies]
+memory-stats = "1"
+
+[lints]
+workspace = true

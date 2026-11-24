@@ -1,0 +1,15 @@
+# Fixture known_hosts (ed25519 test key; fingerprint from `ssh-keygen -lf`).
+
+web.example.com,10.0.0.7 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHQmsf/AJE2WtRdgTKgOjNIJfobAOOvAZW2XgzcVFIZ3 test key
+[git.example.com]:2222 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHQmsf/AJE2WtRdgTKgOjNIJfobAOOvAZW2XgzcVFIZ3
+*.lan,!printer.lan ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHQmsf/AJE2WtRdgTKgOjNIJfobAOOvAZW2XgzcVFIZ3
+# Hashed by `ssh-keygen -H` from "[git.example.com]:2222" and "web.example.com".
+|1|8IMwXruqU0ZizBt8/7h71F1NNDg=|bmfZVnSMTys7qrEC9iB1ByUzfyo= ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHQmsf/AJE2WtRdgTKgOjNIJfobAOOvAZW2XgzcVFIZ3
+|1|tmmdY/Jm2BBg0d8OXrLgXHU/SGA=|HX8b6bTN0oPeoKS/EXlvVsV3FGc= ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHQmsf/AJE2WtRdgTKgOjNIJfobAOOvAZW2XgzcVFIZ3
+@cert-authority *.example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHQmsf/AJE2WtRdgTKgOjNIJfobAOOvAZW2XgzcVFIZ3 ca
+@revoked * ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHQmsf/AJE2WtRdgTKgOjNIJfobAOOvAZW2XgzcVFIZ3
+missing-key-fields ssh-ed25519
+bad.example.com ssh-ed25519 not*base64
+mismatch.example.com ssh-rsa AAAAC3NzaC1lZDI1NTE5AAAAIHQmsf/AJE2WtRdgTKgOjNIJfobAOOvAZW2XgzcVFIZ3
+@bogus host ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHQmsf/AJE2WtRdgTKgOjNIJfobAOOvAZW2XgzcVFIZ3
+|1|c2hvcnQ=|c2hvcnQ= ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHQmsf/AJE2WtRdgTKgOjNIJfobAOOvAZW2XgzcVFIZ3

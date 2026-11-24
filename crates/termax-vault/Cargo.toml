@@ -1,0 +1,29 @@
+[package]
+name = "termax-vault"
+description = "Termax encrypted local store: SQLite (WAL) with per-record AEAD and a two-secret key hierarchy"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+termax-core.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+argon2 = { version = "0.6.0", default-features = false, features = ["alloc", "zeroize"] }
+chacha20poly1305 = { version = "0.11.0", features = ["zeroize"] }
+data-encoding = "2.11.1"
+getrandom = "0.4.3"
+hkdf = "0.13.0"
+hmac = "0.13.0"
+rusqlite = { version = "0.43", features = ["bundled"] }
+secrecy = "0.10.3"
+serde_json = "1.0.154"
+sha2 = "0.11.0"
+zeroize = "1.9.2"
+
+[dev-dependencies]
+tempfile.workspace = true

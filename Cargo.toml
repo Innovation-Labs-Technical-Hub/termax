@@ -1,18 +1,35 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
+# The Ghostty backend needs Zig 0.15.2 to build, so plain `cargo build`,
+# `cargo test` and `cargo clippy` skip it; build it with `just ghostty-test`
+# or `-p termax-term-ghostty`. Do not pass `--workspace`, which overrides this.
+default-members = [
+    "crates/termax-cli",
+    "crates/termax-core",
+    "crates/termax-interop",
+    "crates/termax-policy",
+    "crates/termax-ssh",
+    "crates/termax-sshd-fixture",
+    "crates/termax-term",
+    "crates/termax-vault",
+    "crates/xtask",
+]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
-rust-version = "1.85"
+rust-version = "1.89"
 
 [workspace.dependencies]
-oxt-core = { path = "crates/oxt-core" }
-oxt-policy = { path = "crates/oxt-policy" }
-oxt-interop = { path = "crates/oxt-interop" }
-oxt-vault = { path = "crates/oxt-vault" }
+termax-core = { path = "crates/termax-core" }
+termax-policy = { path = "crates/termax-policy" }
+termax-interop = { path = "crates/termax-interop" }
+termax-vault = { path = "crates/termax-vault" }
+termax-term = { path = "crates/termax-term" }
+termax-ssh = { path = "crates/termax-ssh" }
+termax-sshd-fixture = { path = "crates/termax-sshd-fixture" }
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }
 uuid = { version = "1", features = ["v4", "serde"] }

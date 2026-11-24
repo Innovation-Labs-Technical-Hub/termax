@@ -1,0 +1,29 @@
+[package]
+name = "termax-cli"
+description = "tmx — Termax command-line tool sharing the local vault"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "tmx"
+path = "src/main.rs"
+
+[dependencies]
+termax-core.workspace = true
+termax-interop.workspace = true
+termax-policy.workspace = true
+termax-vault.workspace = true
+anyhow = "1"
+clap = { version = "4", features = ["derive", "env"] }
+directories = "6"
+rpassword = "7"
+serde.workspace = true
+serde_json = "1"
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

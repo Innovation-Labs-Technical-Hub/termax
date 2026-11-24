@@ -1,0 +1,23 @@
+[package]
+name = "termax-term-ghostty-sys"
+description = "Send-able owner of a libghostty-vt terminal and render state; the only unsafe code of the Ghostty backend"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+# libghostty-vt 0.2 requires Rust 1.90; the workspace baseline is 1.89.
+rust-version = "1.90"
+publish = false
+
+[dependencies]
+# Exact pins: libghostty-vt-sys's build script pins a Ghostty commit per
+# release, so a semver-compatible bump silently changes the emulator.
+libghostty-vt = "=0.2.2"
+libghostty-vt-sys = "=0.2.2"
+
+# Mirrors [workspace.lints] except `unsafe_code`: this crate exists to hold the
+# single `unsafe impl Send` the backend needs (see src/lib.rs).
+[lints.rust]
+unsafe_code = "allow"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
