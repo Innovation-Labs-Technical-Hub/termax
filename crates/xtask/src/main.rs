@@ -1,9 +1,18 @@
 //! `cargo xtask perf` — measures the terminal core and SSH layer against the
 //! performance targets in the architecture brief, and fails on regressions
-//! against a baseline run so CI can gate on it.
+//! against a baseline run so CI can gate on it. `cargo xtask spec-coverage`
+//! reports which OpenSpec scenarios are linked to tests.
+
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::print_stdout,
+    reason = "developer tool: prints reports, and a panic is an acceptable failure mode"
+)]
 
 mod metric;
 mod perf;
+mod spec_coverage;
 mod ssh_perf;
 mod sshd;
 mod workloads;
@@ -90,6 +99,20 @@ enum Command {
     },
     /// Start a throwaway OpenSSH sshd for manual testing (Ctrl-C stops it).
     Sshd,
+    /// Report which OpenSpec scenarios are linked to tests (`/// Verifies:`
+    /// tags); fails on tags that point nowhere.
+    SpecCoverage {
+        /// Count only requirements of this phase.
+        #[arg(long, value_parser = ["P1", "P2", "P3"])]
+        phase: Option<String>,
+        /// Write the report as JSON to this file.
+        #[arg(long)]
+        json: Option<PathBuf>,
+        /// Run the tagged tests; a scenario counts as covered only when a
+        /// linked test passes.
+        #[arg(long)]
+        run: bool,
+    },
 }
 
 fn main() -> ExitCode {
@@ -116,6 +139,9 @@ fn main() -> ExitCode {
             ssh: !no_ssh,
         }),
         Command::Sshd => sshd::run().map(|()| true),
+        Command::SpecCoverage { phase, json, run } => {
+            spec_coverage::run(&spec_coverage::Options { phase, json, run })
+        }
     };
     match result {
         Ok(true) => ExitCode::SUCCESS,
