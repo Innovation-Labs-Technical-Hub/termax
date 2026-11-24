@@ -9,6 +9,9 @@ publish = false
 
 [dependencies]
 oxt-term = { path = "../oxt-term" }
+oxt-ssh = { path = "../oxt-ssh" }
+oxt-sshd-fixture = { path = "../oxt-sshd-fixture" }
+tokio = { version = "1", features = ["rt-multi-thread"] }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 memory-stats = "1"

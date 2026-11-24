@@ -3,6 +3,7 @@
 //! is missed so CI can gate on it.
 
 mod perf;
+mod ssh_perf;
 mod workloads;
 
 use std::path::PathBuf;
@@ -33,6 +34,9 @@ enum Command {
         /// Terminals created for the per-tab memory measurement.
         #[arg(long, default_value_t = 20)]
         tabs: usize,
+        /// Skip the SSH measurements against a local sshd.
+        #[arg(long)]
+        no_ssh: bool,
     },
 }
 
@@ -44,11 +48,13 @@ fn main() -> ExitCode {
             json,
             mib,
             tabs,
+            no_ssh,
         } => perf::run(&perf::Options {
             check,
             json,
             bytes: mib << 20,
             tabs,
+            ssh: !no_ssh,
         }),
     };
     match result {

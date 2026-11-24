@@ -24,10 +24,11 @@ pub struct Options {
     pub json: Option<PathBuf>,
     pub bytes: usize,
     pub tabs: usize,
+    pub ssh: bool,
 }
 
 #[derive(Serialize)]
-struct Metric {
+pub struct Metric {
     name: String,
     value: f64,
     unit: &'static str,
@@ -37,13 +38,13 @@ struct Metric {
 }
 
 #[derive(Serialize, Clone, Copy)]
-struct Budget_ {
+pub struct Budget_ {
     limit: f64,
     higher_is_better: bool,
 }
 
 impl Metric {
-    fn new(
+    pub fn new(
         name: impl Into<String>,
         value: f64,
         unit: &'static str,
@@ -66,14 +67,14 @@ impl Metric {
     }
 }
 
-fn at_least(limit: f64) -> Option<Budget_> {
+pub fn at_least(limit: f64) -> Option<Budget_> {
     Some(Budget_ {
         limit,
         higher_is_better: true,
     })
 }
 
-fn at_most(limit: f64) -> Option<Budget_> {
+pub fn at_most(limit: f64) -> Option<Budget_> {
     Some(Budget_ {
         limit,
         higher_is_better: false,
@@ -127,6 +128,10 @@ pub fn run(opts: &Options) -> Result<bool> {
         "MiB",
         None,
     ));
+
+    if opts.ssh {
+        crate::ssh_perf::run(&mut metrics)?;
+    }
 
     print_table(&metrics);
     if let Some(path) = &opts.json {
