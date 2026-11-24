@@ -11,6 +11,7 @@ perf_dir := out_dir / "perf"
 demo_password := "termax-demo-password"
 msrv := `sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml | head -1`
 zig_version := "0.15.2"
+openspec_version := "1.17.0"
 # The Ghostty backend (default on Linux) only builds on Linux for now; see README.
 crates := if os() == "linux" { "--workspace" } else { "--workspace --exclude termax-term-ghostty --exclude termax-term-ghostty-sys" }
 
@@ -124,6 +125,26 @@ perf-baseline:
 # Compare against the local baseline; fails on >10% regressions
 perf-compare *args:
     cargo xtask perf --baseline "{{perf_dir}}/baseline.json" {{args}}
+
+# ── Specs (OpenSpec) ────────────────────────────────────────────────────────
+
+# Run the pinned OpenSpec CLI: `just openspec list --specs`
+openspec *args:
+    bunx @fission-ai/openspec@{{openspec_version}} {{args}}
+
+# Validate every spec and change strictly (same as CI)
+spec-validate:
+    bunx @fission-ai/openspec@{{openspec_version}} validate --all --strict
+
+# List capability specs and active changes
+spec-list:
+    bunx @fission-ai/openspec@{{openspec_version}} list --specs
+    bunx @fission-ai/openspec@{{openspec_version}} list
+
+# Re-import specs from the design set's BRD YAML (review the diff; edited specs are overwritten)
+spec-import brd_yaml_dir:
+    python3 tools/openspec_from_brd.py "{{brd_yaml_dir}}" openspec/specs
+    just spec-validate
 
 # ── Playground ──────────────────────────────────────────────────────────────
 

@@ -42,6 +42,15 @@ jobs:
         shell: bash
       - run: cargo test ${{ env.CRATES }}
         shell: bash
+  spec:
+    # OpenSpec specs and changes must stay valid (see openspec/AGENTS.md).
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npx --yes @fission-ai/openspec@1.17.0 validate --all --strict
   deny:
     runs-on: ubuntu-24.04
     steps:
