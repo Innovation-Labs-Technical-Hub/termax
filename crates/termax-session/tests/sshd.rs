@@ -466,8 +466,15 @@ fn unresponsive_dns_is_cancellable_and_times_out_with_dns_001() {
         "open() returned at once"
     );
     rt.block_on(async {
-        wait_state(&mut rx, timed_out.id(), StateKind::Resolving).await;
-        wait_state(&mut rx, cancelled.id(), StateKind::Resolving).await;
+        // The two lookups start on different workers, so either may report
+        // first; wait for both in any order.
+        wait_all(
+            &rt,
+            &mut rx,
+            &[timed_out.id(), cancelled.id()],
+            StateKind::Resolving,
+        )
+        .await;
         // `Resolving` is reported just before each lookup arms its timeout on
         // the clock; advancing the manual clock earlier would move the
         // deadline. Wait until both lookups are waiting on it.
