@@ -250,6 +250,19 @@ impl PolicyEngine {
         verdict
     }
 
+    /// What the command rules alone (built-in and user rules, with the
+    /// production downgrade) would decide, without the kill switch, the
+    /// actor's mode or the rate limit, and without an audit entry. Used to
+    /// decide whether a refused request may still be offered to the user
+    /// for approval; it never authorises anything by itself.
+    pub fn rules_verdict(&self, req: &EvalRequest<'_>) -> Verdict {
+        let mut verdict = self.rules.evaluate(req.command);
+        if verdict.effect == Effect::Allow && req.is_prod() {
+            verdict = Verdict::new(Effect::Ask, "production host: approval required");
+        }
+        verdict
+    }
+
     fn decide(&self, req: &EvalRequest<'_>, now: u64) -> Verdict {
         if self.kill_switch.is_engaged() {
             return Verdict::new(Effect::Deny, "kill switch engaged");

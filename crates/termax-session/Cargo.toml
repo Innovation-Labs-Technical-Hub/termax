@@ -19,6 +19,9 @@ tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "
 tracing = "0.1"
 # Reconnect jitter; not security-relevant.
 fastrand = "2"
+# OS network-change notifications (netlink, SystemConfiguration,
+# NotifyIpInterfaceChange); maintained by libp2p.
+if-watch = { version = "3", features = ["tokio"] }
 
 # Ghostty's Zig build currently works on Linux only, where it is the default
 # terminal backend; other platforms use alacritty_terminal.

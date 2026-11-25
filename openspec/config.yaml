@@ -25,7 +25,10 @@ context: |
     Argon2id + Secret Key), termax-ssh (russh 0.65, strict KEX, ML-KEM),
     termax-session (session runtime: one tokio runtime with 2 I/O workers,
     registry, lifecycle + TMX error codes, reconnect, Duplicate, Happy
-    Eyeballs, per-session parser task),
+    Eyeballs, per-session parser task, network-change probes),
+    termax-control (local control endpoint: JSON-RPC 2.0 over a 0600 UDS or
+    owner-only named pipe, pairing + keychain tokens, scopes, audit,
+    headless mode),
     termax-term (TermCore trait + alacritty_terminal 0.26),
     termax-term-ghostty (libghostty-vt 0.2.2, Zig 0.15.2; default backend on
     Linux), termax-cli (`tmx`), termax-sshd-fixture, xtask (perf harness).

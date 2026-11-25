@@ -651,7 +651,13 @@ mod tests {
             );
         }
         // Every documented code is in the catalogue (no stale pages).
-        for line in page.lines().filter_map(|l| l.strip_prefix("## TMX-")) {
+        // Control-endpoint codes (`TMX-CTL-*`) are catalogued and checked
+        // in termax-control.
+        for line in page
+            .lines()
+            .filter_map(|l| l.strip_prefix("## TMX-"))
+            .filter(|l| !l.starts_with("CTL-"))
+        {
             assert!(
                 ids.contains(format!("TMX-{line}").as_str()),
                 "stale doc TMX-{line}"
