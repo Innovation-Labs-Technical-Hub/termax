@@ -110,6 +110,21 @@ pub fn run(opts: &Options) -> Result<bool> {
         );
     }
 
+    // The same question through the session runtime's real data path
+    // (window-sized queue, parser task on the I/O workers, triple buffer)
+    // at its default 2 MiB window.
+    let (p50, p99) = crate::session_perf::flood_echo_latency(
+        make,
+        termax_session::pipeline::DEFAULT_WINDOW_BYTES,
+    )?;
+    metrics
+        .push(Metric::lower("echo under flood p50 via termax-session", p50, "ms").abs_slack(5.0));
+    metrics.push(
+        Metric::lower("echo under flood p99 via termax-session", p99, "ms")
+            .target(TARGET_FLOOD_ECHO_MS)
+            .abs_slack(5.0),
+    );
+
     for (label, lines, idle, target) in [
         ("empty history", 0, false, None),
         ("1k lines", 1_000, false, None),

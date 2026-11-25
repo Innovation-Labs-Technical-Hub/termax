@@ -24,7 +24,19 @@ pub fn run(metrics: &mut Vec<Metric>) -> Result<()> {
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
-    rt.block_on(measure(&sshd, metrics))
+    rt.block_on(measure(&sshd, metrics))?;
+    // Outside `block_on`: the session runtime owns its own tokio runtime.
+    metrics.push(
+        Metric::lower(
+            "duplicate local overhead (termax-session)",
+            crate::session_perf::duplicate_overhead_ms(&sshd)?,
+            "ms",
+        )
+        .target(MAX_NEW_CHANNEL_MS)
+        .ungated(),
+    );
+
+    Ok(())
 }
 
 async fn measure(sshd: &Sshd, metrics: &mut Vec<Metric>) -> Result<()> {

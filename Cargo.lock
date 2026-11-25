@@ -2393,6 +2393,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "termax-session"
+version = "0.1.0"
+dependencies = [
+ "fastrand",
+ "tempfile",
+ "termax-core",
+ "termax-ssh",
+ "termax-sshd-fixture",
+ "termax-term",
+ "termax-term-ghostty",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "termax-ssh"
 version = "0.1.0"
 dependencies = [
@@ -2978,6 +2995,7 @@ dependencies = [
  "serde_json",
  "syn 2.0.119",
  "tempfile",
+ "termax-session",
  "termax-ssh",
  "termax-sshd-fixture",
  "termax-term",

@@ -12,6 +12,7 @@
 
 mod metric;
 mod perf;
+mod session_perf;
 mod spec_coverage;
 mod ssh_perf;
 mod sshd;

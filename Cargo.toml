@@ -15,6 +15,7 @@ termax-interop = { path = "crates/termax-interop" }
 termax-vault = { path = "crates/termax-vault" }
 termax-term = { path = "crates/termax-term" }
 termax-ssh = { path = "crates/termax-ssh" }
+termax-session = { path = "crates/termax-session" }
 termax-sshd-fixture = { path = "crates/termax-sshd-fixture" }
 termax-term-ghostty = { path = "crates/termax-term-ghostty" }
 thiserror = "2"

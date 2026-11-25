@@ -1,0 +1,30 @@
+[package]
+name = "termax-session"
+description = "Termax session runtime: one I/O runtime, session registry, lifecycle and error codes, reconnect, Duplicate, async DNS with Happy Eyeballs, and the per-session terminal data path"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+termax-core.workspace = true
+termax-ssh.workspace = true
+termax-term.workspace = true
+thiserror.workspace = true
+uuid = { workspace = true, features = ["v7"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros"] }
+tracing = "0.1"
+# Reconnect jitter; not security-relevant.
+fastrand = "2"
+
+# Ghostty's Zig build currently works on Linux only, where it is the default
+# terminal backend; other platforms use alacritty_terminal.
+[target.'cfg(target_os = "linux")'.dependencies]
+termax-term-ghostty.workspace = true
+
+[dev-dependencies]
+termax-sshd-fixture.workspace = true
+tempfile.workspace = true
