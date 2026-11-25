@@ -27,6 +27,12 @@ unsafe_code = "forbid"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
+# Library code must not panic on fallible input or print to stdout. Tests
+# are exempt through clippy.toml; binaries and test support opt out at the
+# crate root with a reason.
+unwrap_used = "warn"
+expect_used = "warn"
+print_stdout = "warn"
 
 [profile.release]
 lto = "thin"

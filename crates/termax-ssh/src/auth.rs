@@ -674,6 +674,8 @@ fn sign_local(
 mod tests {
     use super::*;
 
+    /// Verifies: FR-CO02-010 acceptance 1
+    /// Verifies: FR-CO02-010 acceptance 2
     #[test]
     fn trivial_success_is_refused() {
         assert!(matches!(

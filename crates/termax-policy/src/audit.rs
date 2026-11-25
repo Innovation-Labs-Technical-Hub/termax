@@ -243,6 +243,7 @@ mod tests {
         assert_eq!(back.verify(), Ok(()));
     }
 
+    /// Verifies: FR-AG03-010 acceptance 1
     #[test]
     fn detects_modified_content() {
         let mut log = sample();
@@ -274,6 +275,7 @@ mod tests {
         );
     }
 
+    /// Verifies: FR-AG03-010 acceptance 1
     #[test]
     fn detects_tampering_in_serialised_form() {
         let text = sample().to_jsonl().replace("\"deny\"", "\"allow\"");

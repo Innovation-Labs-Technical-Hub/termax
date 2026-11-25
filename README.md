@@ -26,7 +26,7 @@ The design set (C4 architecture, BRD-00…13, module catalogue, mockups) lives o
 | `termax-term-ghostty` (+ `-sys`) | Default `TermCore` backend on Linux, on libghostty-vt (Ghostty's terminal core); built with Zig 0.15.2. macOS and Windows use the alacritty backend until Ghostty's Zig build supports the macOS 26 SDK and Visual Studio 2026 |
 | `termax-cli` | The `tmx` command-line tool |
 | `termax-sshd-fixture` | Throwaway unprivileged OpenSSH sshd for tests and the perf harness |
-| `xtask` | Perf harness (`cargo xtask perf`) and `cargo xtask sshd` |
+| `xtask` | Perf harness (`cargo xtask perf`), `cargo xtask spec-coverage` and `cargo xtask sshd` |
 
 ## Specs and principles
 
@@ -46,6 +46,7 @@ just ci           # fmt check, clippy -D warnings, tests, cargo-deny — same as
 just test termax-ssh
 just perf         # terminal + SSH performance against the brief's targets
 just perf-baseline && just perf-compare   # local regression check
+just spec-coverage --phase P1   # OpenSpec scenarios linked to tests (`--run` also runs them)
 ```
 
 Playground:
@@ -64,4 +65,4 @@ just term-test          # both backends against the same expectations
 just compare-backends   # Ghostty vs alacritty numbers side by side
 ```
 
-On Linux, building needs Zig 0.15.2 on `PATH` (`just zig-install`); on macOS and Windows the Ghostty crates are skipped by `just` and CI. The first build of the Ghostty backend in a fresh build directory clones Ghostty from GitHub at a pinned commit; set `GHOSTTY_SOURCE_DIR` to a local checkout of that commit to build offline. CI runs the same checks on Linux, Windows and macOS (amd64 and arm64), `cargo-deny` for the licence and advisory policy in `deny.toml`, and a perf job that fails on >10 % regressions against the PR's base commit (skipped when the base used a different terminal backend).
+On Linux, building needs Zig 0.15.2 on `PATH` (`just zig-install`); on macOS and Windows the Ghostty crates are skipped by `just` and CI. The first build of the Ghostty backend in a fresh build directory clones Ghostty from GitHub at a pinned commit; set `GHOSTTY_SOURCE_DIR` to a local checkout of that commit to build offline. CI runs the same checks on Linux, Windows and macOS (amd64 and arm64), `cargo-deny` for the licence and advisory policy in `deny.toml`, and a perf job that fails on >10 % regressions against the PR's base commit (skipped when the base used a different terminal backend), and a coverage job that reports OpenSpec scenario coverage and fails on dangling `Verifies:` tags.

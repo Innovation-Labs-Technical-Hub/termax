@@ -398,6 +398,7 @@ mod tests {
         assert_eq!(sk.expose(), typed.expose());
     }
 
+    /// Verifies: FR-CO08-003 acceptance 2
     #[test]
     fn account_key_depends_on_both_secrets() {
         let salt = [1u8; SALT_LEN];
@@ -412,6 +413,7 @@ mod tests {
         assert_ne!(*a, *c);
     }
 
+    /// Verifies: FR-CO08-002 specified behaviour
     #[test]
     fn seal_uses_fresh_nonces_and_binds_aad() {
         let key = random_key().unwrap();

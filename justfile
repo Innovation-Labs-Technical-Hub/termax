@@ -141,6 +141,10 @@ spec-list:
     bunx @fission-ai/openspec@{{openspec_version}} list --specs
     bunx @fission-ai/openspec@{{openspec_version}} list
 
+# Scenarios linked to tests by `/// Verifies:` tags: `just spec-coverage --phase P1 --run`
+spec-coverage *args:
+    cargo xtask spec-coverage {{args}}
+
 # Re-import specs from the design set's BRD YAML (review the diff; edited specs are overwritten)
 spec-import brd_yaml_dir:
     python3 tools/openspec_from_brd.py "{{brd_yaml_dir}}" openspec/specs

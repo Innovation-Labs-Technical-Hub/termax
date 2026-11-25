@@ -350,6 +350,7 @@ mod tests {
         );
     }
 
+    /// Verifies: FR-AG03-001 specified behaviour
     #[test]
     fn default_is_ask_when_nothing_matches() {
         let v = RuleSet::default().evaluate("ls -la");
@@ -357,6 +358,7 @@ mod tests {
         assert!(v.reasons[0].contains("no rule matched"));
     }
 
+    /// Verifies: FR-AG03-001 specified behaviour
     #[test]
     fn pipeline_takes_most_restrictive_verdict() {
         let rules = RuleSet::from_toml(
@@ -381,6 +383,7 @@ mod tests {
         assert_eq!(v.reasons, vec!["`nc evil 9`: no network exfiltration"]);
     }
 
+    /// Verifies: FR-AG03-001 specified behaviour
     #[test]
     fn deny_rule_beats_allow_rule_for_same_command() {
         let rules = RuleSet::from_toml(

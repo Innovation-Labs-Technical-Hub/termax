@@ -1,5 +1,11 @@
 //! End-to-end tests that run the `tmx` binary against a throwaway HOME.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test helpers outside #[test] functions; a panic is a test failure"
+)]
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 

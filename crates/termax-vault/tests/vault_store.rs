@@ -1,3 +1,9 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test helpers outside #[test] functions; a panic is a test failure"
+)]
+
 use std::path::{Path, PathBuf};
 
 use tempfile::TempDir;
@@ -112,6 +118,7 @@ fn create_and_reopen_round_trip() {
     assert!(matches!(s.get_host(h.id), Err(Error::NotFound { .. })));
 }
 
+/// Verifies: FR-CO08-003 acceptance 2
 #[test]
 fn wrong_password_or_secret_key_fails_closed() {
     let fx = Fixture::new();
@@ -149,6 +156,7 @@ fn lifecycle_errors_are_distinct_from_bad_credentials() {
     ));
 }
 
+/// Verifies: FR-CO08-006 specified behaviour
 #[test]
 fn no_plaintext_secrets_on_disk() {
     let fx = Fixture::new();
@@ -192,6 +200,7 @@ fn no_plaintext_secrets_on_disk() {
     assert_eq!(fx.open().get_host(h.id).unwrap(), h);
 }
 
+/// Verifies: FR-CO08-002 acceptance 1
 #[test]
 fn swapping_ciphertexts_between_rows_is_detected() {
     let fx = Fixture::new();
@@ -319,6 +328,8 @@ fn change_password_rewraps_keys() {
     );
 }
 
+/// Verifies: FR-CO08-009 specified behaviour
+/// Verifies: FR-CO08-009 acceptance 1
 #[test]
 fn resolved_settings_walk_nested_groups_outermost_first() {
     let fx = Fixture::new();
