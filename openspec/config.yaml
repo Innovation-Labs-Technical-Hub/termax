@@ -23,6 +23,9 @@ context: |
     command policy, audit chain), termax-interop (ssh_config/known_hosts),
     termax-vault (SQLite WAL via rusqlite 0.43, XChaCha20-Poly1305 per record,
     Argon2id + Secret Key), termax-ssh (russh 0.65, strict KEX, ML-KEM),
+    termax-session (session runtime: one tokio runtime with 2 I/O workers,
+    registry, lifecycle + TMX error codes, reconnect, Duplicate, Happy
+    Eyeballs, per-session parser task),
     termax-term (TermCore trait + alacritty_terminal 0.26),
     termax-term-ghostty (libghostty-vt 0.2.2, Zig 0.15.2; default backend on
     Linux), termax-cli (`tmx`), termax-sshd-fixture, xtask (perf harness).

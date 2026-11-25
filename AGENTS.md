@@ -4,7 +4,7 @@ Termax is a local-first, agent-native SSH workspace written in Rust (product cod
 
 ## Stack
 
-Rust 2024, workspace MSRV 1.90, tokio. SSH via a russh 0.65 facade; terminal cores behind the `TermCore` trait (libghostty-vt via Zig 0.15.2 on Linux, alacritty_terminal elsewhere); encrypted SQLite vault (rusqlite 0.43, XChaCha20-Poly1305, Argon2id + Secret Key); tree-sitter-bash command policy; clap CLI `tmx`. Planned: GPUI desktop (decision D1 pending), rmcp MCP, wasmtime plugins, Flutter mobile, Rust cloud service (separate repos).
+Rust 2024, workspace MSRV 1.90, tokio. SSH via a russh 0.65 facade; a session runtime (`termax-session`) owning one tokio runtime and the session registry; terminal cores behind the `TermCore` trait (libghostty-vt via Zig 0.15.2 on Linux, alacritty_terminal elsewhere); encrypted SQLite vault (rusqlite 0.43, XChaCha20-Poly1305, Argon2id + Secret Key); tree-sitter-bash command policy; clap CLI `tmx`. Planned: GPUI desktop (decision D1 pending), rmcp MCP, wasmtime plugins, Flutter mobile, Rust cloud service (separate repos).
 
 ## Directory map
 
@@ -16,6 +16,7 @@ Rust 2024, workspace MSRV 1.90, tokio. SSH via a russh 0.65 facade; terminal cor
 | `crates/termax-vault` | Encrypted local store | Platform/security |
 | `crates/termax-ssh` | SSH client facade (trust, auth, channels, forwarding, ProxyJump) | Tech lead |
 | `crates/termax-term`, `termax-term-ghostty(-sys)` | Terminal cores and the shared `TermCore` trait | Terminal engineer |
+| `crates/termax-session` | Session runtime and registry, lifecycle and `TMX-` error codes, reconnect, Duplicate, DNS/Happy Eyeballs, per-session parser task | Tech lead |
 | `crates/termax-cli` | `tmx` CLI | Tech lead |
 | `crates/termax-sshd-fixture`, `crates/xtask` | Test sshd, perf harness, `xtask sshd` | Platform |
 | `openspec/` | Requirements (14 capabilities), changes, glossary — see `openspec/AGENTS.md` | Product owner + tech lead |

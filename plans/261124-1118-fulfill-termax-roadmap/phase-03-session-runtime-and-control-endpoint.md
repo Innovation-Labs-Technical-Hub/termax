@@ -27,9 +27,9 @@ Owner: Tech lead · Priority: P1 · Effort: 5–6 person-weeks · Depends on: ph
 
 ## Todo
 
-- [ ] `add-session-runtime` tasks 1.1–5.2 done
+- [ ] `add-session-runtime` tasks 1.1–5.2 done (2026-11-25, branch `feat/session-runtime`: 11/14 verified; open: 1.1 awaits CI on macOS/Windows and `cargo deny`, 5.1 awaits the Tech lead's quiet-period decision (provisional 60 s), 5.2 awaits archive after merge)
 - [ ] `add-control-endpoint` proposed, validated, implemented
-- [ ] Echo-under-flood metric through `termax-session` gated in CI
+- [x] Echo-under-flood metric through `termax-session` gated in CI ("echo under flood p50/p99 via termax-session", gated like the other flood metrics; first base comparison happens on the PR after this one)
 - [ ] Changes archived
 
 ## Success Criteria
