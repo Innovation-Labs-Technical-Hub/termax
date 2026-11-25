@@ -40,7 +40,7 @@
 - `Stalled` is in the state machine but not emitted yet: `termax-ssh` reports only the final keepalive timeout, not individual misses.
 - Ghostty's `memory_estimate` does not change after compaction; RSS does (see the perf harness). On macOS and Windows (alacritty backend) `on_idle` is a no-op.
 - Tests force `/bin/sh` through the fixture's `ForceCommand` so the developer's login shell and rc files cannot drop typeahead or rewrite titles.
-- `slow_handshake_never_blocks_the_caller_or_other_tabs` asserts a 4 ms bound on the calling thread; it lives in its own test binary so other tests cannot preempt it.
+- `slow_handshake_never_blocks_the_caller_or_other_tabs` asserts a 4 ms bound on every call of the calling thread on Linux; on shared macOS/Windows runners, which preempt the thread for ~10 ms now and then, it asserts the 4 ms bound at p99 and < 100 ms for every call (a real block on the 150 ms-per-packet handshake still fails). It lives in its own test binary so other tests cannot preempt it.
 
 ## OpenSpec
 

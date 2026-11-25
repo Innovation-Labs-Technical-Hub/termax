@@ -601,7 +601,10 @@ mod tests {
 
     fn doc_page() -> String {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        std::fs::read_to_string(root.join(DOC_PAGE)).expect("docs/error-codes.md exists")
+        // Windows checkouts may convert line endings to CRLF.
+        std::fs::read_to_string(root.join(DOC_PAGE))
+            .expect("docs/error-codes.md exists")
+            .replace("\r\n", "\n")
     }
 
     /// The section of the doc page under `## <id>`, up to the next heading.
