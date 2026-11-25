@@ -9,9 +9,11 @@ báo và hành động gợi ý ngay trong giao diện (không dùng hộp tho�
 thích từng mã. Mã không bao giờ được đánh số lại hay dùng lại.
 
 The catalogue lives in `crates/termax-session/src/codes.rs`; a unit test checks that every
-code there has a section here with matching EN and VI titles.
+code there has a section here with matching EN and VI titles. Control-endpoint codes
+(`TMX-CTL-*`, returned to `tmx` and MCP clients) live in `crates/termax-control/src/error.rs`
+and are checked the same way.
 
-Areas · Nhóm: `NET` Network · Mạng, `DNS` Name resolution · Phân giải tên, `HOSTKEY` Host keys · Khóa máy chủ, `AUTH` Authentication · Xác thực, `SSH` SSH protocol · Giao thức SSH, `CFG` Configuration · Cấu hình, `FWD` Port forwarding · Chuyển tiếp cổng.
+Areas · Nhóm: `NET` Network · Mạng, `DNS` Name resolution · Phân giải tên, `HOSTKEY` Host keys · Khóa máy chủ, `AUTH` Authentication · Xác thực, `SSH` SSH protocol · Giao thức SSH, `CFG` Configuration · Cấu hình, `FWD` Port forwarding · Chuyển tiếp cổng, `CTL` Local control endpoint · Điểm điều khiển cục bộ.
 
 ## TMX-NET-001
 
@@ -296,3 +298,64 @@ Automatic reconnect · Tự động kết nối lại: no · không
 Suggested actions · Hành động gợi ý:
 
 - Edit the connection settings · Sửa cài đặt kết nối
+
+## TMX-CTL-400
+
+**EN:** Bad control request. The request was malformed or used an unsupported API version.
+
+**VI:** Yêu cầu điều khiển không hợp lệ. Yêu cầu sai định dạng hoặc dùng phiên bản API không được hỗ trợ.
+
+Suggested actions · Hành động gợi ý:
+
+- Update tmx to the same version as the app · Cập nhật tmx cùng phiên bản với ứng dụng
+
+## TMX-CTL-401
+
+**EN:** Client not paired. The client has no valid token: it never paired, its token was revoked, or pairing was denied.
+
+**VI:** Client chưa được ghép cặp. Client không có token hợp lệ: chưa từng ghép cặp, token đã bị thu hồi hoặc yêu cầu ghép cặp bị từ chối.
+
+Suggested actions · Hành động gợi ý:
+
+- Pair again with `tmx pair` and approve the request · Ghép cặp lại bằng `tmx pair` và chấp thuận yêu cầu
+
+## TMX-CTL-403
+
+**EN:** Not allowed for this client. The client's scope or the command policy does not allow this call. When policy allows, an approval request was created.
+
+**VI:** Client này không được phép. Phạm vi quyền của client hoặc chính sách lệnh không cho phép thao tác này. Nếu chính sách cho phép, một yêu cầu phê duyệt đã được tạo.
+
+Suggested actions · Hành động gợi ý:
+
+- Approve the request in Termax · Phê duyệt yêu cầu trong Termax
+- Pair again with the operate scope · Ghép cặp lại với quyền operate
+
+## TMX-CTL-404
+
+**EN:** No such session. The session does not exist or has closed.
+
+**VI:** Không có phiên này. Phiên không tồn tại hoặc đã đóng.
+
+Suggested actions · Hành động gợi ý:
+
+- List sessions with `tmx sessions list` · Liệt kê phiên bằng `tmx sessions list`
+
+## TMX-CTL-429
+
+**EN:** Too many control requests. The client sent requests faster than the endpoint's rate limit.
+
+**VI:** Quá nhiều yêu cầu điều khiển. Client gửi yêu cầu nhanh hơn giới hạn của điểm điều khiển.
+
+Suggested actions · Hành động gợi ý:
+
+- Try again · Thử lại
+
+## TMX-CTL-500
+
+**EN:** Control operation failed. The runtime could not carry out the request; the session's own error code, when there is one, is included.
+
+**VI:** Thao tác điều khiển thất bại. Runtime không thực hiện được yêu cầu; mã lỗi của phiên (nếu có) được kèm theo.
+
+Suggested actions · Hành động gợi ý:
+
+- Try again · Thử lại

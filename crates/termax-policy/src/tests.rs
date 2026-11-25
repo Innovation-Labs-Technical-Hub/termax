@@ -285,3 +285,32 @@ fn every_decision_is_audited_in_a_valid_chain() {
     tampered = AuditLog::from_jsonl(&log.to_jsonl()).unwrap();
     assert_eq!(tampered.head_hash(), log.head_hash());
 }
+
+#[test]
+fn rules_verdict_ignores_the_actor_mode_and_leaves_no_audit_entry() {
+    let engine = PolicyEngine::new(PolicyConfig {
+        rules: allow_all_rm(),
+        rate_limit: None,
+    });
+    let actor = Actor::External {
+        client_id: "agent-1".into(),
+    };
+    let req = |command| EvalRequest {
+        actor: &actor,
+        command,
+        env: Env::None,
+        tags: &[],
+    };
+    // The observe-only actor is refused by `evaluate`, but the rules alone
+    // would allow `ls` and deny a recursive delete of `/`.
+    assert_eq!(engine.rules_verdict(&req("ls -la")).effect, Effect::Allow);
+    assert_eq!(engine.rules_verdict(&req("rm -rf /")).effect, Effect::Deny);
+    assert!(engine.audit_log().is_empty());
+    assert_eq!(engine.evaluate(&req("ls -la")).effect, Effect::Deny);
+    assert_eq!(engine.audit_log().len(), 1);
+    let prod = EvalRequest {
+        env: Env::Prod,
+        ..req("ls")
+    };
+    assert_eq!(engine.rules_verdict(&prod).effect, Effect::Ask);
+}

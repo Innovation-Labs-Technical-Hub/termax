@@ -209,6 +209,11 @@ impl Actor {
             Command::ForwardLocal { reply, .. } => {
                 let _ = reply.send(Err(SessionError::NotOpen));
             }
+            Command::Signal { reply, .. } | Command::Break { reply, .. } => {
+                let _ = reply.send(Err(SessionError::NotOpen));
+            }
+            // A probe raced with a disconnect that already happened.
+            Command::Stall => {}
             Command::Close { .. } => unreachable!("handled by the caller"),
         }
     }
@@ -321,6 +326,17 @@ impl Actor {
             Some(Err(d)) => return Step::Failed(d),
             Some(Ok(a)) => a,
         };
+        // Bound concurrent connection attempts (TCP connect through shell
+        // open) so a resume with many sessions does not start a reconnect
+        // storm. The permit is released when this function returns.
+        let handshakes = Arc::clone(&shared.handshakes);
+        let _permit = match self.interruptible(handshakes.acquire_owned()).await {
+            None => return Step::Closed,
+            Some(Err(_)) => {
+                return Step::Failed(Disconnect::new(ErrorCode::NetLost, "runtime shutting down"));
+            }
+            Some(Ok(p)) => p,
+        };
         self.transition(SessionState::Connecting);
         let tcp = match self.interruptible(est.connect(&addrs)).await {
             None => return Step::Closed,
@@ -371,8 +387,13 @@ impl Actor {
         conn.channels.fetch_add(1, Ordering::SeqCst);
         *lock(&self.core.conn) = Some(Arc::clone(&conn));
         let input = self.input.clone();
+        let output = self.core.output.clone();
         self.reader = Some(self.core.shared.handle.spawn(async move {
             while let Some(bytes) = reader.read().await {
+                if output.receiver_count() > 0 {
+                    // Lagging or departed subscribers are not our problem.
+                    let _ = output.send(Arc::from(bytes.as_slice()));
+                }
                 if input.push(bytes).await.is_err() {
                     break;
                 }
@@ -490,6 +511,31 @@ impl Actor {
                         {
                             tracing::debug!(error = %e, "window change not delivered");
                         }
+                    }
+                    Some(Command::Signal { signal, reply }) => {
+                        let w = lock(&self.writer).clone();
+                        let r = match w {
+                            Some(w) => w.signal(signal).await.map_err(|e| SessionError::Failed(codes::from_ssh(&e))),
+                            None => Err(SessionError::NotOpen),
+                        };
+                        let _ = reply.send(r);
+                    }
+                    Some(Command::Break { millis, reply }) => {
+                        let w = lock(&self.writer).clone();
+                        let r = match w {
+                            Some(w) => w.send_break(millis).await.map_err(|e| SessionError::Failed(codes::from_ssh(&e))),
+                            None => Err(SessionError::NotOpen),
+                        };
+                        let _ = reply.send(r);
+                    }
+                    Some(Command::Stall) => {
+                        reader.abort();
+                        self.transition(SessionState::Stalled);
+                        let timeout = self.core.shared.config.probe_timeout;
+                        return Step::Failed(Disconnect::new(
+                            ErrorCode::NetKeepalive,
+                            format!("no reply to a keepalive probe within {} s after a network change", timeout.as_secs_f64()),
+                        ));
                     }
                     Some(Command::ForwardLocal { bind, host, port, reply }) => {
                         let r = match ssh.forward_local(bind, &host, port).await {

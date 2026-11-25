@@ -17,6 +17,10 @@
 //! - [`SessionRuntime::list`] and [`SessionRuntime::subscribe`] expose the
 //!   registry and its [`SessionEvent`]s; [`SessionRuntime::quit`] closes
 //!   everything gracefully.
+//! - [`SessionService::network_changed`] probes every connection after a
+//!   network change or resume; unresponsive ones go `Stalled` and reconnect,
+//!   with at most `max_parallel_handshakes` connection attempts at once
+//!   ([`netwatch`] subscribes to the OS events).
 //! - Each session parses output on its own task ([`pipeline`]): a bounded
 //!   queue sized to the SSH window, budgeted `TermCore::feed`, frames through
 //!   a triple buffer, and idle compaction after a quiet period.
@@ -30,6 +34,7 @@ pub mod codes;
 pub mod log;
 mod model;
 pub mod net;
+pub mod netwatch;
 pub mod pipeline;
 mod runtime;
 pub mod state;
@@ -42,10 +47,13 @@ pub use model::{
     QuitReport, QuitSummary, SessionEvent, SessionId, SessionInfo, Target,
 };
 pub use runtime::{
-    DEFAULT_IO_WORKERS, DEFAULT_MAX_BLOCKING_THREADS, DEFAULT_QUIT_BUDGET, DuplicateMode,
-    OpenRequest, RuntimeConfig, SessionError, SessionHandle, SessionRuntime, TermFactory,
+    DEFAULT_IO_WORKERS, DEFAULT_MAX_BLOCKING_THREADS, DEFAULT_MAX_PARALLEL_HANDSHAKES,
+    DEFAULT_PROBE_TIMEOUT, DEFAULT_QUIT_BUDGET, DuplicateMode, OUTPUT_TAP_CAPACITY, OpenRequest,
+    ProbeReport, RuntimeConfig, SessionError, SessionHandle, SessionRuntime, SessionService,
+    TermFactory,
 };
 pub use state::{SessionState, StateKind};
+pub use termax_ssh::Signal;
 
 use termax_term::{TermConfig, TermCore};
 

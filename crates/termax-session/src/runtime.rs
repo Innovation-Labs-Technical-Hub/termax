@@ -9,9 +9,10 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant, SystemTime};
 
 use termax_core::Protocol;
+use termax_ssh::Signal;
 use termax_ssh::{ConnectContext, ConnectOptions, PtyRequest};
 use termax_term::{Budget, GridSize, TermConfig, TermCore};
-use tokio::sync::{broadcast, mpsc, oneshot, watch};
+use tokio::sync::{Semaphore, broadcast, mpsc, oneshot, watch};
 
 use crate::backoff::ReconnectPolicy;
 use crate::clock::{Clock, SystemClock};
@@ -39,6 +40,13 @@ pub const DEFAULT_IO_WORKERS: usize = 2;
 pub const DEFAULT_MAX_BLOCKING_THREADS: usize = 16;
 /// Time allowed for closing sessions and flushing logs on quit.
 pub const DEFAULT_QUIT_BUDGET: Duration = Duration::from_secs(2);
+/// Wait for a keepalive reply after a network change before a connection
+/// counts as stalled.
+pub const DEFAULT_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
+/// Concurrent SSH connection attempts (reconnect-storm limit).
+pub const DEFAULT_MAX_PARALLEL_HANDSHAKES: usize = 4;
+/// Raw output chunks buffered per output subscriber before it lags.
+pub const OUTPUT_TAP_CAPACITY: usize = 256;
 
 /// Runtime settings.
 #[derive(Clone)]
@@ -80,6 +88,15 @@ pub struct RuntimeConfig {
     pub event_capacity: usize,
     /// Budget for [`SessionRuntime::quit`].
     pub quit_budget: Duration,
+    /// How long a connection probe waits for the server's keepalive reply
+    /// before the connection's sessions go `Stalled` and reconnect.
+    pub probe_timeout: Duration,
+    /// SSH connection attempts (TCP connect, handshake and authentication)
+    /// allowed at once across all sessions; the rest wait in FIFO order.
+    pub max_parallel_handshakes: usize,
+    /// Probe every connection on OS network-change events and after the
+    /// machine resumes from sleep (see [`crate::netwatch`]).
+    pub watch_os_events: bool,
 }
 
 impl Default for RuntimeConfig {
@@ -102,6 +119,9 @@ impl Default for RuntimeConfig {
             clock: Arc::new(SystemClock),
             event_capacity: 1024,
             quit_budget: DEFAULT_QUIT_BUDGET,
+            probe_timeout: DEFAULT_PROBE_TIMEOUT,
+            max_parallel_handshakes: DEFAULT_MAX_PARALLEL_HANDSHAKES,
+            watch_os_events: true,
         }
     }
 }
@@ -118,6 +138,9 @@ impl RuntimeConfig {
         }
         if self.idle_compaction_quiet_period.is_zero() {
             return bad("idle_compaction_quiet_period must be non-zero");
+        }
+        if self.probe_timeout.is_zero() || self.max_parallel_handshakes == 0 {
+            return bad("probe_timeout and max_parallel_handshakes must be non-zero");
         }
         if self.budget.max_bytes == 0 || self.event_capacity == 0 {
             return bad("budget.max_bytes and event_capacity must be non-zero");
@@ -215,6 +238,16 @@ pub(crate) enum Command {
     Close {
         reply: Option<oneshot::Sender<()>>,
     },
+    Signal {
+        signal: Signal,
+        reply: oneshot::Sender<Result<(), SessionError>>,
+    },
+    Break {
+        millis: u32,
+        reply: oneshot::Sender<Result<(), SessionError>>,
+    },
+    /// A probe found the connection unresponsive.
+    Stall,
 }
 
 /// Per-session state shared by the registry, handles and the session task.
@@ -227,6 +260,7 @@ pub(crate) struct SessionCore {
     pub frames: Mutex<Option<FrameReader>>,
     pub conn: Mutex<Option<Arc<Conn>>>,
     pub request: Mutex<OpenRequest>,
+    pub output: broadcast::Sender<Arc<[u8]>>,
     pub shared: Arc<Shared>,
 }
 
@@ -278,6 +312,8 @@ pub(crate) struct Shared {
     pub events: broadcast::Sender<SessionEvent>,
     pub sessions: Mutex<BTreeMap<SessionId, Arc<SessionCore>>>,
     pub disconnects: AtomicUsize,
+    /// Permits for concurrent SSH connection attempts (FIFO).
+    pub handshakes: Arc<Semaphore>,
 }
 
 impl Shared {
@@ -299,9 +335,12 @@ impl Shared {
 /// the process. All network I/O, DNS, crypto and terminal parsing run on its
 /// threads; the methods here only enqueue work and never block the caller,
 /// except [`SessionRuntime::quit`] and [`SessionRuntime::block_on`].
+///
+/// [`SessionRuntime::service`] hands out a cloneable [`SessionService`] for
+/// clients that need the registry from other tasks (the control endpoint).
 pub struct SessionRuntime {
     rt: Option<tokio::runtime::Runtime>,
-    shared: Arc<Shared>,
+    service: SessionService,
 }
 
 impl SessionRuntime {
@@ -317,31 +356,138 @@ impl SessionRuntime {
         let (events, _) = broadcast::channel(config.event_capacity);
         let shared = Arc::new(Shared {
             handle: rt.handle().clone(),
+            handshakes: Arc::new(Semaphore::new(config.max_parallel_handshakes)),
             config,
             events,
             sessions: Mutex::default(),
             disconnects: AtomicUsize::new(0),
         });
+        let service = SessionService { shared };
+        if service.shared.config.watch_os_events {
+            crate::netwatch::spawn(service.clone());
+        }
         Ok(Self {
             rt: Some(rt),
-            shared,
+            service,
         })
+    }
+
+    /// A cloneable handle on the registry (IF-04-01 `SessionService`).
+    pub fn service(&self) -> SessionService {
+        self.service.clone()
     }
 
     /// The tokio runtime handle (for async callers such as the CLI).
     pub fn handle(&self) -> &tokio::runtime::Handle {
-        &self.shared.handle
+        &self.service.shared.handle
     }
 
     /// Run a future on the runtime and wait for it. Must not be called from
     /// inside an async context.
     pub fn block_on<F: Future>(&self, fut: F) -> F::Output {
-        self.shared.handle.block_on(fut)
+        self.service.shared.handle.block_on(fut)
     }
 
     /// I/O worker threads (fixed at start).
     pub fn io_workers(&self) -> usize {
-        self.shared.handle.metrics().num_workers()
+        self.service.shared.handle.metrics().num_workers()
+    }
+
+    /// Open a session. Returns at once; progress arrives as events.
+    pub fn open(&self, request: OpenRequest) -> SessionHandle {
+        self.service.open(request)
+    }
+
+    /// See [`SessionService::duplicate`].
+    pub fn duplicate(
+        &self,
+        source: SessionId,
+        mode: DuplicateMode,
+    ) -> Result<SessionHandle, SessionError> {
+        self.service.duplicate(source, mode)
+    }
+
+    /// A handle to a live session.
+    pub fn session(&self, id: SessionId) -> Option<SessionHandle> {
+        self.service.session(id)
+    }
+
+    /// Every live session, oldest first.
+    pub fn list(&self) -> Vec<SessionInfo> {
+        self.service.list()
+    }
+
+    /// See [`SessionService::subscribe`].
+    pub fn subscribe(&self) -> broadcast::Receiver<SessionEvent> {
+        self.service.subscribe()
+    }
+
+    /// Record a client attached to a session.
+    pub fn attach(
+        &self,
+        id: SessionId,
+        client: ClientRef,
+        grant: Grant,
+    ) -> Result<(), SessionError> {
+        self.service.attach(id, client, grant)
+    }
+
+    /// What quitting now would end.
+    pub fn quit_summary(&self) -> QuitSummary {
+        self.service.quit_summary()
+    }
+
+    /// Quit: notify clients, close every session gracefully (EOF, channel
+    /// close, DISCONNECT on each connection) and flush the connection log,
+    /// all within `quit_budget`. Blocks the caller; call it from a non-async
+    /// thread.
+    pub fn quit(&self) -> QuitReport {
+        self.block_on(self.service.quit())
+    }
+}
+
+impl Drop for SessionRuntime {
+    fn drop(&mut self) {
+        // Break the registry ↔ session reference cycle.
+        lock(&self.service.shared.sessions).clear();
+        // Dropping a runtime from async context panics; never wait here.
+        if let Some(rt) = self.rt.take() {
+            rt.shutdown_background();
+        }
+    }
+}
+
+/// Result of [`SessionService::network_changed`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProbeReport {
+    /// Distinct live connections probed.
+    pub connections: usize,
+    /// Longest delay between the call and a probe leaving for its
+    /// connection.
+    pub max_send_delay: Duration,
+    /// Connections that did not answer within the probe timeout (or were
+    /// already closed); their sessions went `Stalled` and reconnect.
+    pub stalled: Vec<ConnectionId>,
+}
+
+/// A cloneable handle on the session registry: the in-process form of
+/// IF-04-01 `SessionService`, shared by the UI, the CLI and the local
+/// control endpoint. It stays valid while its [`SessionRuntime`] lives; after
+/// the runtime is dropped, calls see an empty registry.
+#[derive(Clone)]
+pub struct SessionService {
+    shared: Arc<Shared>,
+}
+
+impl SessionService {
+    /// The tokio runtime handle.
+    pub fn handle(&self) -> &tokio::runtime::Handle {
+        &self.shared.handle
+    }
+
+    /// The runtime's clock.
+    pub fn clock(&self) -> Arc<dyn Clock> {
+        Arc::clone(&self.shared.config.clock)
     }
 
     /// Open a session. Returns at once; progress arrives as events.
@@ -414,6 +560,7 @@ impl SessionRuntime {
             frames: Mutex::new(Some(pipe.frames)),
             conn: Mutex::new(None),
             request: Mutex::new(request),
+            output: broadcast::Sender::new(OUTPUT_TAP_CAPACITY),
             shared: Arc::clone(&self.shared),
         });
         lock(&self.shared.sessions).insert(id, Arc::clone(&core));
@@ -450,7 +597,7 @@ impl SessionRuntime {
 
     /// Receive every session event from now on. A subscriber that falls
     /// more than `event_capacity` events behind gets `Lagged` and should
-    /// re-read [`SessionRuntime::list`].
+    /// re-read [`SessionService::list`].
     pub fn subscribe(&self) -> broadcast::Receiver<SessionEvent> {
         self.shared.events.subscribe()
     }
@@ -465,6 +612,18 @@ impl SessionRuntime {
         self.core(id)?
             .update_info(|i| i.clients.push(Attachment { client, grant }));
         Ok(())
+    }
+
+    /// Remove one attachment of `client` (the most recent one) from a
+    /// session. Unknown sessions and clients are ignored.
+    pub fn detach(&self, id: SessionId, client: &ClientRef) {
+        if let Ok(core) = self.core(id) {
+            core.update_info(|i| {
+                if let Some(pos) = i.clients.iter().rposition(|a| &a.client == client) {
+                    i.clients.remove(pos);
+                }
+            });
+        }
     }
 
     /// What quitting now would end.
@@ -482,11 +641,9 @@ impl SessionRuntime {
         QuitSummary { sessions, forwards }
     }
 
-    /// Quit: notify clients, close every session gracefully (EOF, channel
-    /// close, DISCONNECT on each connection) and flush the connection log,
-    /// all within `quit_budget`. Blocks the caller; call it from a non-async
-    /// thread.
-    pub fn quit(&self) -> QuitReport {
+    /// Close every session gracefully and flush the connection log within
+    /// `quit_budget` (see [`SessionRuntime::quit`]).
+    pub async fn quit(&self) -> QuitReport {
         let start = Instant::now();
         let budget = self.shared.config.quit_budget;
         let cores: Vec<_> = lock(&self.shared.sessions).values().cloned().collect();
@@ -505,24 +662,21 @@ impl SessionRuntime {
             })
             .collect();
         let log = Arc::clone(&self.shared.config.log);
-        let (closed, flushed) = self.block_on(async move {
-            let deadline = tokio::time::Instant::now() + budget;
-            let mut closed = 0;
-            for rx in waits {
-                if tokio::time::timeout_at(deadline, rx)
-                    .await
-                    .is_ok_and(|r| r.is_ok())
-                {
-                    closed += 1;
-                }
+        let deadline = tokio::time::Instant::now() + budget;
+        let mut closed = 0;
+        for rx in waits {
+            if tokio::time::timeout_at(deadline, rx)
+                .await
+                .is_ok_and(|r| r.is_ok())
+            {
+                closed += 1;
             }
-            let flush = tokio::task::spawn_blocking(move || log.flush());
-            let flushed = matches!(
-                tokio::time::timeout_at(deadline, flush).await,
-                Ok(Ok(Ok(())))
-            );
-            (closed, flushed)
-        });
+        }
+        let flush = tokio::task::spawn_blocking(move || log.flush());
+        let flushed = matches!(
+            tokio::time::timeout_at(deadline, flush).await,
+            Ok(Ok(Ok(())))
+        );
         QuitReport {
             sessions_closed: closed,
             sessions_abandoned: cores.len() - closed,
@@ -531,16 +685,76 @@ impl SessionRuntime {
             elapsed: start.elapsed(),
         }
     }
-}
 
-impl Drop for SessionRuntime {
-    fn drop(&mut self) {
-        // Break the registry ↔ session reference cycle.
-        lock(&self.shared.sessions).clear();
-        // Dropping a runtime from async context panics; never wait here.
-        if let Some(rt) = self.rt.take() {
-            rt.shutdown_background();
+    /// Distinct live connections and the sessions on each.
+    pub(crate) fn connections(&self) -> BTreeMap<ConnectionId, (Arc<Conn>, Vec<Arc<SessionCore>>)> {
+        let mut out: BTreeMap<ConnectionId, (Arc<Conn>, Vec<Arc<SessionCore>>)> = BTreeMap::new();
+        let cores: Vec<_> = lock(&self.shared.sessions).values().cloned().collect();
+        for core in cores {
+            let conn = lock(&core.conn).clone();
+            if let Some(conn) = conn {
+                out.entry(conn.id)
+                    .or_insert_with(|| (Arc::clone(&conn), Vec::new()))
+                    .1
+                    .push(core);
+            }
         }
+        out
+    }
+
+    /// The network changed or the machine resumed: probe every live
+    /// connection at once with a keepalive that wants a reply. A connection
+    /// that does not answer within `probe_timeout` is unusable; its
+    /// sessions go `Stalled`, then `Disconnected(TMX-NET-005)`, and
+    /// reconnect with backoff. Returns once every probe has finished.
+    pub async fn network_changed(&self) -> ProbeReport {
+        let clock = Arc::clone(&self.shared.config.clock);
+        let timeout = self.shared.config.probe_timeout;
+        // Probe latency is reported in real time, independent of the
+        // runtime clock that drives the timeout.
+        let start = Instant::now();
+        let conns = self.connections();
+        let connections = conns.len();
+        let mut probes = tokio::task::JoinSet::new();
+        for (id, (conn, cores)) in conns {
+            let clock = Arc::clone(&clock);
+            probes.spawn(async move {
+                let sent = start.elapsed();
+                let answered = tokio::select! {
+                    r = conn.ssh.ping() => r.is_ok(),
+                    () = clock.sleep(timeout) => false,
+                };
+                if !answered {
+                    for core in &cores {
+                        // A session that already moved on ignores this.
+                        let _ = core.cmd.send(Command::Stall);
+                    }
+                }
+                (id, sent, answered)
+            });
+        }
+        let mut report = ProbeReport {
+            connections,
+            max_send_delay: Duration::ZERO,
+            stalled: Vec::new(),
+        };
+        while let Some(done) = probes.join_next().await {
+            match done {
+                Ok((id, sent, answered)) => {
+                    report.max_send_delay = report.max_send_delay.max(sent);
+                    if !answered {
+                        report.stalled.push(id);
+                    }
+                }
+                Err(e) => tracing::warn!(error = %e, "connection probe task failed"),
+            }
+        }
+        tracing::info!(
+            connections = report.connections,
+            stalled = report.stalled.len(),
+            "probed connections after a network change"
+        );
+        report
     }
 }
 
@@ -607,6 +821,31 @@ impl SessionHandle {
         })?;
         rx.await
             .map_err(|_| SessionError::UnknownSession(self.core.id))?
+    }
+
+    /// Deliver a signal to the remote process (RFC 4254 §6.9). Fails with
+    /// [`SessionError::NotOpen`] while there is no shell.
+    pub async fn signal(&self, signal: Signal) -> Result<(), SessionError> {
+        let (reply, rx) = oneshot::channel();
+        self.send(Command::Signal { signal, reply })?;
+        rx.await
+            .map_err(|_| SessionError::UnknownSession(self.core.id))?
+    }
+
+    /// Send a break of `millis` milliseconds (RFC 4335).
+    pub async fn send_break(&self, millis: u32) -> Result<(), SessionError> {
+        let (reply, rx) = oneshot::channel();
+        self.send(Command::Break { millis, reply })?;
+        rx.await
+            .map_err(|_| SessionError::UnknownSession(self.core.id))?
+    }
+
+    /// Receive the raw bytes the shell sends from now on, in order, as they
+    /// arrive from the network (before terminal parsing). A subscriber that
+    /// falls more than 256 chunks behind gets `Lagged` and misses those
+    /// chunks; the stream ends when the session closes.
+    pub fn subscribe_output(&self) -> broadcast::Receiver<Arc<[u8]>> {
+        self.core.output.subscribe()
     }
 
     /// Close gracefully (EOF, channel close, DISCONNECT if it was the last

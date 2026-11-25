@@ -259,3 +259,101 @@ fn policy_check_exit_codes() {
         Some(0)
     );
 }
+
+/// Kills a background `tmx` if the test fails before it exits.
+struct Child(std::process::Child);
+
+impl Drop for Child {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+fn wait_until(what: &str, mut cond: impl FnMut() -> bool) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    while !cond() {
+        assert!(std::time::Instant::now() < deadline, "timed out: {what}");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+}
+
+/// Verifies: FR-CO01-007 acceptance 2
+#[cfg(unix)]
+#[test]
+fn headless_serves_a_private_socket_refuses_unpaired_clients_and_exits_when_idle() {
+    use std::os::unix::fs::PermissionsExt;
+    use std::process::Stdio;
+
+    let env = setup();
+    // Short path: Unix socket paths are limited to ~104 bytes.
+    let tmp = tempfile::Builder::new()
+        .prefix("tmxe")
+        .tempdir_in("/tmp")
+        .unwrap();
+    let dir = tmp.path().join("ep");
+    let dir_arg = dir.to_str().unwrap();
+    let sock = dir.join("control.sock");
+    let mut child = Child(
+        env.cmd()
+            .args(["--endpoint", dir_arg, "headless", "--idle-timeout", "3"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap(),
+    );
+    wait_until("socket appears", || sock.exists());
+    let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode(&dir), 0o700);
+    assert_eq!(mode(&sock), 0o600);
+
+    let out = env
+        .cmd()
+        .args(["--endpoint", dir_arg, "sessions", "list"])
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        err.contains("TMX-CTL-401") && err.contains("tmx pair"),
+        "{err}"
+    );
+
+    // Without a terminal, headless cannot ask the user and denies pairing.
+    let out = env
+        .cmd()
+        .args(["--endpoint", dir_arg, "pair"])
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("denied"), "{err}");
+
+    // One runtime per user and endpoint.
+    let out = env
+        .cmd()
+        .args(["--endpoint", dir_arg, "headless"])
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("already running"), "{err}");
+
+    // No sessions and no clients for 3 s: it exits and removes its socket.
+    let mut status = None;
+    wait_until("headless exits when idle", || {
+        status = child.0.try_wait().unwrap();
+        status.is_some()
+    });
+    assert!(status.unwrap().success());
+    assert!(!sock.exists(), "socket removed");
+    let out = env
+        .cmd()
+        .args(["--endpoint", dir_arg, "ls"])
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("tmx headless"), "{err}");
+}

@@ -298,6 +298,18 @@ impl Session {
             .map_err(Error::from)
     }
 
+    /// Send `keepalive@openssh.com` with want-reply and wait for the
+    /// server's answer. Never returns on a silently dead path; callers bound
+    /// it with their own timeout. Fails if the connection is or becomes
+    /// closed.
+    pub async fn ping(&self) -> Result<()> {
+        self.ensure_open()?;
+        self.inner.handle.send_ping().await.map_err(Error::from)?;
+        // russh also resolves the ping when the connection drops; report
+        // that as closed rather than as an answer.
+        self.ensure_open()
+    }
+
     fn ensure_open(&self) -> Result<()> {
         match self.state() {
             ConnectionState::Closed(r) => Err(Error::Closed(r)),
