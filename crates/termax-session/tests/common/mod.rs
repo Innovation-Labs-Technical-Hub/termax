@@ -91,8 +91,31 @@ pub async fn wait_state(
     id: SessionId,
     kind: StateKind,
 ) -> SessionState {
-    let ev = wait_for(rx, |e| entered(e, id).is_some_and(|s| s.kind() == kind)).await;
-    entered(&ev, id).cloned().expect("state event")
+    // Same as `wait_for`, but a timeout names the wait and lists what this
+    // session did, so CI failures say where they stopped.
+    let deadline = tokio::time::Instant::now() + WAIT;
+    let mut seen = Vec::new();
+    loop {
+        match tokio::time::timeout_at(deadline, rx.recv()).await {
+            Err(_) => panic!(
+                "timed out waiting for session {id:?} to reach {kind:?}; its events: {seen:#?}"
+            ),
+            Ok(Ok(ev)) => {
+                if let Some(s) = entered(&ev, id)
+                    && s.kind() == kind
+                {
+                    return s.clone();
+                }
+                if ev.session == id {
+                    seen.push(ev);
+                }
+            }
+            Ok(Err(broadcast::error::RecvError::Lagged(n))) => {
+                eprintln!("wait_state: event stream lagged, {n} events lost");
+            }
+            Ok(Err(e)) => panic!("event stream ended: {e}"),
+        }
+    }
 }
 
 /// Wait until every session in `ids` is in a state of `kind` (checks the
