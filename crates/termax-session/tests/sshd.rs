@@ -468,6 +468,17 @@ fn unresponsive_dns_is_cancellable_and_times_out_with_dns_001() {
     rt.block_on(async {
         wait_state(&mut rx, timed_out.id(), StateKind::Resolving).await;
         wait_state(&mut rx, cancelled.id(), StateKind::Resolving).await;
+        // `Resolving` is reported just before each lookup arms its timeout on
+        // the clock; advancing the manual clock earlier would move the
+        // deadline. Wait until both lookups are waiting on it.
+        let armed = tokio::time::Instant::now() + WAIT;
+        while clock.sleepers() < 2 {
+            assert!(
+                tokio::time::Instant::now() < armed,
+                "lookups never armed their timeout"
+            );
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
         // Cancel one lookup.
         let t = Instant::now();
         cancelled.close();
