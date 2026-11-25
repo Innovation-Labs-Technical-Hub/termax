@@ -261,8 +261,10 @@ fn policy_check_exit_codes() {
 }
 
 /// Kills a background `tmx` if the test fails before it exits.
+#[cfg(unix)]
 struct Child(std::process::Child);
 
+#[cfg(unix)]
 impl Drop for Child {
     fn drop(&mut self) {
         let _ = self.0.kill();
@@ -270,6 +272,7 @@ impl Drop for Child {
     }
 }
 
+#[cfg(unix)]
 fn wait_until(what: &str, mut cond: impl FnMut() -> bool) {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
     while !cond() {
