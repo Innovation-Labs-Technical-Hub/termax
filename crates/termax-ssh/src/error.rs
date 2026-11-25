@@ -121,9 +121,17 @@ pub enum Error {
         reason: String,
     },
 
-    /// The server refused to open a channel.
+    /// The server refused a request on a channel (pty, shell, exec) or the
+    /// channel closed during setup.
     #[error("channel open failed: {0}")]
     ChannelOpen(String),
+
+    /// The server answered a channel open with `SSH_MSG_CHANNEL_OPEN_FAILURE`
+    /// (RFC 4254 §5.1). OpenSSH (10.2) reports `MaxSessions` as
+    /// [`ChannelOpenFailure::ConnectFailed`]; other servers use
+    /// `AdministrativelyProhibited` or `ResourceShortage`.
+    #[error("server refused to open a channel: {0}")]
+    ChannelRefused(ChannelOpenFailure),
 
     /// The operation is not supported by the SSH backend.
     #[error("unsupported: {0}")]
@@ -155,7 +163,7 @@ impl From<russh::Error> for Error {
                 after: Duration::ZERO,
             },
             russh::Error::IO(io) => Error::Io(io),
-            russh::Error::ChannelOpenFailure(f) => Error::ChannelOpen(format!("{f:?}")),
+            russh::Error::ChannelOpenFailure(f) => Error::ChannelRefused(f.into()),
             other => Error::Protocol(other.to_string()),
         }
     }
@@ -164,6 +172,60 @@ impl From<russh::Error> for Error {
 impl From<russh::SendError> for Error {
     fn from(_: russh::SendError) -> Self {
         Error::Protocol("session task is gone".into())
+    }
+}
+
+/// Reason code of a refused channel open (RFC 4254 §5.1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ChannelOpenFailure {
+    /// `SSH_OPEN_ADMINISTRATIVELY_PROHIBITED` (1).
+    AdministrativelyProhibited,
+    /// `SSH_OPEN_CONNECT_FAILED` (2); also what OpenSSH sends at `MaxSessions`.
+    ConnectFailed,
+    /// `SSH_OPEN_UNKNOWN_CHANNEL_TYPE` (3).
+    UnknownChannelType,
+    /// `SSH_OPEN_RESOURCE_SHORTAGE` (4).
+    ResourceShortage,
+    /// Any other code, with the server's description.
+    Other {
+        /// Reason code on the wire.
+        code: u32,
+        /// Server-provided description.
+        description: String,
+    },
+}
+
+impl fmt::Display for ChannelOpenFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ChannelOpenFailure::AdministrativelyProhibited => {
+                f.write_str("administratively prohibited")
+            }
+            ChannelOpenFailure::ConnectFailed => f.write_str("connect failed"),
+            ChannelOpenFailure::UnknownChannelType => f.write_str("unknown channel type"),
+            ChannelOpenFailure::ResourceShortage => f.write_str("resource shortage"),
+            ChannelOpenFailure::Other { code, description } => {
+                write!(f, "code {code}: {description}")
+            }
+        }
+    }
+}
+
+impl From<russh::ChannelOpenFailure> for ChannelOpenFailure {
+    fn from(f: russh::ChannelOpenFailure) -> Self {
+        match f {
+            russh::ChannelOpenFailure::AdministrativelyProhibited => {
+                ChannelOpenFailure::AdministrativelyProhibited
+            }
+            russh::ChannelOpenFailure::ConnectFailed => ChannelOpenFailure::ConnectFailed,
+            russh::ChannelOpenFailure::UnknownChannelType => ChannelOpenFailure::UnknownChannelType,
+            russh::ChannelOpenFailure::ResourceShortage => ChannelOpenFailure::ResourceShortage,
+            russh::ChannelOpenFailure::Other { code, reason } => ChannelOpenFailure::Other {
+                code,
+                description: reason,
+            },
+        }
     }
 }
 

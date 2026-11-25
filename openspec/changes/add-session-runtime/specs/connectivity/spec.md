@@ -6,7 +6,7 @@
 The system SHALL compact a session's terminal history memory after the session's output has been quiet for a configurable period, without changing what the user sees, selects or finds by search.
 
 Source: product decision 2026-11-24 (idle scrollback compression approved to meet NFR-00-003); evidence plans/reports/perf-261124-1028-terminal-core-baseline.md · Module: CO-01 · Priority: Must · Phase: P1  
-Quiet period default: [TO CONFIRM · CHỜ XÁC NHẬN] (owner: Tech lead)
+Quiet period default: [TO CONFIRM · CHỜ XÁC NHẬN] (owner: Tech lead); provisional 60 s
 
 #### Scenario: FR-CO01-011 quiet session is compacted
 - **GIVEN** an SSH session on the Linux default terminal backend whose 80×24 terminal holds 10,000 lines of history

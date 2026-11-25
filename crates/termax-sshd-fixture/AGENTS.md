@@ -2,24 +2,25 @@
 
 ## Purpose
 
-`termax-sshd-fixture` starts a throwaway, unprivileged OpenSSH `sshd` on `127.0.0.1` as the current user, with fresh host and client keys in a temporary directory. The `termax-ssh` integration tests, the `cargo xtask perf` SSH measurements, and `cargo xtask sshd` / `just sshd` use it. Shipping code never uses it, and it is `publish = false`.
+`termax-sshd-fixture` starts a throwaway, unprivileged OpenSSH `sshd` on `127.0.0.1` as the current user, with fresh host and client keys in a temporary directory. The `termax-ssh` and `termax-session` integration tests, the `cargo xtask perf` SSH measurements, and `cargo xtask sshd` / `just sshd` use it. Shipping code never uses it, and it is `publish = false`.
 
 ## Public API entry points
 
-- `Sshd::start() -> Option<Sshd>`. It returns `None`, after printing `SKIP: ...`, when `/usr/sbin/sshd` or `ssh-keygen` is missing.
-- On `Sshd`: `opts()` (`ConnectOptions` for the authorized client key, with quick timeouts), `trusting_verifier()`, `authorize(priv_path)`, `rotate_host_key()`, `host_fingerprint()`, `host_port()`, `addr()`, `host_key_path()`, and the `client_key` field.
+- `Sshd::start() -> Option<Sshd>` and `Sshd::start_with(SshdOptions { max_sessions, force_command })`. They return `None`, after printing `SKIP: ...`, when `/usr/sbin/sshd` or `ssh-keygen` is missing.
+- On `Sshd`: `opts()` (`ConnectOptions` for the authorized client key, with quick timeouts), `trusting_verifier()`, `authorize(priv_path)`, `rotate_host_key()`, `host_fingerprint()`, `host_port()`, `addr()`, `host_key_path()`, `log()` (the sshd log so far), and the `client_key` field.
+- `NetProxy::start(upstream)`: a loopback TCP proxy that simulates network faults without root (`set_delay`, `go_down`/`come_up` black-hole and refuse, `sever`, `accepted`).
 - Helpers: `key_auth`, `ctx`, `trusted_ctx`, `keygen`, `pubkey_line`, `free_port`, `current_user`, `have`, and the `SSHD` constant.
 
 ## Commands
 
-- `cargo test -p termax-sshd-fixture` (unit test of the OpenSSH version parser).
+- `cargo test -p termax-sshd-fixture` (unit tests of the OpenSSH version parser and the proxy).
 - `cargo clippy -p termax-sshd-fixture --all-targets -- -D warnings`.
 - `just test-ssh` exercises the fixture through the `termax-ssh` integration tests.
 - `just sshd` (the same as `cargo xtask sshd`) runs it in the foreground and prints an `ssh` command line. Stop it with Ctrl-C, which also removes the temporary directory.
 
 ## Layout
 
-- `src/lib.rs`: the whole crate (sshd_config generation, spawn with port retries, key helpers, and connect-context helpers).
+- `src/lib.rs`: sshd_config generation, spawn with port retries, key helpers, and connect-context helpers. `src/proxy.rs`: `NetProxy` (plain threads, usable from sync and async tests).
 
 ## Conventions
 

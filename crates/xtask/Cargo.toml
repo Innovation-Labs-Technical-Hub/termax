@@ -10,6 +10,7 @@ publish = false
 [dependencies]
 termax-term.workspace = true
 termax-ssh.workspace = true
+termax-session.workspace = true
 termax-sshd-fixture.workspace = true
 tokio = { version = "1", features = ["rt-multi-thread", "signal", "macros"] }
 anyhow = "1"

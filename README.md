@@ -22,6 +22,7 @@ The design set (C4 architecture, BRD-00…13, module catalogue, mockups) lives o
 | `termax-interop` | `~/.ssh/config` and `known_hosts` import, ssh_config export |
 | `termax-vault` | Encrypted local store (SQLite WAL + per-record XChaCha20-Poly1305, Argon2id + Secret Key) |
 | `termax-ssh` | SSH client facade over russh: strict KEX + ML-KEM, host-key trust, auth, multiplexed channels, `-L`, ProxyJump |
+| `termax-session` | Session runtime: one I/O runtime and session registry, lifecycle states and `TMX-` error codes ([docs/error-codes.md](docs/error-codes.md)), reconnect with backoff, Duplicate on the same connection, async DNS + Happy Eyeballs, per-session parser task with idle compaction |
 | `termax-term` | `TermCore` terminal-core trait, shared input encoders, and the alacritty_terminal backend (kept for comparison and as a fallback) |
 | `termax-term-ghostty` (+ `-sys`) | Default `TermCore` backend on Linux, on libghostty-vt (Ghostty's terminal core); built with Zig 0.15.2. macOS and Windows use the alacritty backend until Ghostty's Zig build supports the macOS 26 SDK and Visual Studio 2026 |
 | `termax-cli` | The `tmx` command-line tool |

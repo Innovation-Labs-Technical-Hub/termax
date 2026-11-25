@@ -6,12 +6,12 @@
 
 ## Public API entry points
 
-- `Session::connect(&ConnectOptions, &ConnectContext)`, and on the cloneable `Session` handle: `exec`, `open_shell`, `forward_local`, `negotiated`, `state`, `subscribe`, `closed` and `disconnect`.
+- `Session::connect(&ConnectOptions, &ConnectContext)` (or `Session::connect_stream` over a TCP stream the caller connected, for its own DNS and Happy Eyeballs), and on the cloneable `Session` handle: `exec`, `open_shell`, `forward_local`, `negotiated`, `state`, `subscribe`, `closed` and `disconnect`.
 - `ConnectOptions` (with secure `Default`), `JumpHop`, `AuthMethod`, `CryptoPolicy`, `PtyRequest`, and the `DEFAULT_*`, `MIN_WINDOW_SIZE`, `MIN_PACKET_SIZE` and `MAX_PACKET_SIZE` constants.
 - Trust: `HostKeyVerifier` (`MemoryVerifier`, `VaultVerifier`), `TrustDecision` (`FixedTrust`), `TrustChoice`, `HostKeyStatus`, `HostKeyInfo`, `host_port`.
 - Prompts: `Prompter`, `NoPrompter`, `KbdInteractiveRequest`, `KbdPrompt`.
 - Channels: `ShellChannel` (split into `ShellReader` and `ShellWriter`), `ExecOutput`, `ExitStatus`, `Signal`, `ForwardHandle`.
-- State and errors: `ConnectionState`, `CloseReason`, `Error`, `AuthAttempt`, `AttemptOutcome`. Also `quirks_for`, `QUIRKS` and `is_post_quantum`.
+- State and errors: `ConnectionState`, `CloseReason`, `Error` (a refused channel open is `Error::ChannelRefused(ChannelOpenFailure)`; OpenSSH reports `MaxSessions` as `ConnectFailed`), `AuthAttempt`, `AttemptOutcome`. Also `quirks_for`, `QUIRKS` and `is_post_quantum`.
 
 ## Commands
 

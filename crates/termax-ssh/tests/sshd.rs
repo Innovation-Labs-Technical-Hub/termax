@@ -570,3 +570,51 @@ async fn connect_timeout_is_enforced() {
     })
     .await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn max_sessions_refusal_is_typed() {
+    let Some(sshd) = Sshd::start_with(SshdOptions {
+        max_sessions: Some(1),
+        ..SshdOptions::default()
+    }) else {
+        return;
+    };
+    within(async {
+        let s = Session::connect(&sshd.opts(), &trusted_ctx(&sshd))
+            .await
+            .unwrap();
+        let pty = PtyRequest {
+            term: "xterm".into(),
+            cols: 80,
+            rows: 24,
+        };
+        let _first = s.open_shell(&pty).await.unwrap();
+        let err = s.open_shell(&pty).await.err().expect("second channel");
+        // OpenSSH answers MaxSessions with SSH_OPEN_CONNECT_FAILED (2), not
+        // "administratively prohibited"; other servers use 1 or 4.
+        assert!(
+            matches!(
+                err,
+                Error::ChannelRefused(termax_ssh::ChannelOpenFailure::ConnectFailed)
+            ),
+            "{err}"
+        );
+    })
+    .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn connect_stream_uses_the_callers_tcp_and_verifies_by_name() {
+    let sshd = sshd_or_skip!();
+    within(async {
+        let tcp = tokio::net::TcpStream::connect(sshd.addr()).await.unwrap();
+        // The trusted key is stored under the options' host:port, which is
+        // what gets verified, whatever address the stream was opened to.
+        let s = Session::connect_stream(&sshd.opts(), &trusted_ctx(&sshd), tcp)
+            .await
+            .unwrap();
+        assert_eq!(s.exec("echo ok").await.unwrap().stdout, b"ok\n");
+        s.disconnect().await.unwrap();
+    })
+    .await;
+}

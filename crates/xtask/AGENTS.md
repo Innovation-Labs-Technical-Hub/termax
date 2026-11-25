@@ -27,6 +27,7 @@ This is a binary crate. The `cargo xtask` alias in `.cargo/config.toml` runs it 
 
 - `src/main.rs`: the clap commands and backend selection (Ghostty is compiled in only on Linux).
 - `src/perf.rs`: terminal-core measurements, generic over a `TermCore` factory. `src/workloads.rs`: deterministic byte streams that stand in for real traffic.
+- `src/session_perf.rs`: measurements through `termax-session`: echo under flood through the session data path (gated) and Duplicate's local overhead against the fixture sshd (reported).
 - `src/ssh_perf.rs`: SSH measurements against `termax-sshd-fixture`, compared with the stock OpenSSH client where that makes sense.
 - `src/metric.rs`: the `Metric` type, targets, gated and ungated metrics, and baseline comparison. `src/sshd.rs`: the foreground sshd command.
 - `src/spec_coverage/`: `specs.rs` parses `openspec/specs/*/spec.md`, `tags.rs` finds `Verifies:` tags with `syn` and resolves each test's target and libtest name, `runner.rs` runs tagged tests per cargo target (`cargo test -p P --lib|--test T -- --exact …`) and parses the stable libtest output, and `mod.rs` matches tags to scenarios and prints the report and JSON.

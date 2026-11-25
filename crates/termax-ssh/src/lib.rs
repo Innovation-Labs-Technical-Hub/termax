@@ -41,7 +41,7 @@ mod trust;
 
 pub use auth::{KbdInteractiveRequest, KbdPrompt, NoPrompter, Prompter};
 pub use channel::{ExitStatus, ShellChannel, ShellReader, ShellWriter, Signal};
-pub use error::{AttemptOutcome, AuthAttempt, Error, Result};
+pub use error::{AttemptOutcome, AuthAttempt, ChannelOpenFailure, Error, Result};
 pub use forward::ForwardHandle;
 pub use options::{
     AuthMethod, ConnectOptions, CryptoPolicy, DEFAULT_CIPHER, DEFAULT_HOST_KEY, DEFAULT_KEX,

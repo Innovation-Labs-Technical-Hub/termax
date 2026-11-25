@@ -37,4 +37,24 @@ Dependency direction today: `termax-ssh → termax-vault → termax-core`. A run
 - **Window size vs. echo latency**: larger windows raise throughput but delay echo under flood (measured 47.5 ms p99 at 4 MiB on alacritty). Default 2 MiB; revisit with real UI frame pacing.
 - **Happy Eyeballs** adds connection-race complexity; if no maintained crate fits the licence policy, implement RFC 8305 minimally (two staggered attempts) and test with an unreachable AAAA fixture.
 - **Platform split**: compaction is a no-op on macOS/Windows until the Ghostty build works there; NFR-00-003 is only met on Linux in this slice.
-- **MaxSessions detection** depends on how servers report channel-open failure; the fallback is triggered by the generic "administratively prohibited" reason and verified against OpenSSH with `MaxSessions 1` in the sshd fixture.
+- **MaxSessions detection** depends on how servers report channel-open failure. Verified against OpenSSH 10.2 with `MaxSessions 1` in the sshd fixture: OpenSSH answers with `SSH_OPEN_CONNECT_FAILED` (2), not "administratively prohibited" (1). The fallback therefore triggers on any refused channel open (`termax_ssh::Error::ChannelRefused`, whatever the reason code) and on a connection that closed in the meantime.
+- **Window credit**: russh 0.65 sends `WINDOW_ADJUST` when data arrives, not when the application consumes it, and offers no hook to defer it. The parser still returns consumed bytes as credit to the window-sized queue; when the queue is full the reader stops reading the channel, russh's per-channel buffer fills and its session loop (and TCP) stall. Back-pressure holds, but a flooding tab can briefly stall sibling channels on a shared connection. True SSH-level credit needs a russh API change.
+- **Stalled**: the state exists and its transitions are validated, but `termax-ssh` reports only the final keepalive timeout, so the runtime does not emit `Stalled` yet.
+
+## Defaults chosen in implementation
+
+Values the decisions above do not fix, chosen and documented here (none is a business decision):
+
+| Setting | Default | Why |
+|---|---|---|
+| Reconnect jitter | ±20 % uniform, applied after doubling, result capped at 60 s | Decision 5. |
+| Reconnect scope | Only sessions that reached `Open`; a first connection that fails stays `Disconnected` | FR-CO01-004 lists failures of a running session; retrying a wrong address silently helps nobody. |
+| Happy Eyeballs Connection Attempt Delay | 250 ms | RFC 8305 §5 recommended value; the system resolver returns both families in one answer, so there is no separate resolution delay. |
+| Socket options | `SO_KEEPALIVE`, `TCP_NODELAY`, 256 KiB receive buffer | FR-CO01-009 (64–256 KiB). |
+| Queue size | the connection's SSH window, accepted range 2–4 MiB | `termax-ssh` refuses windows below 2 MiB (FR-CO03 "≥ 2 MiB initial window"), so decision 3's lower bound of 1 MiB is not reachable for SSH sessions. |
+| Frame publish interval while output flows | 8 ms (plus a publish whenever the queue drains) | Half a 60 Hz frame, so the UI always pulls a fresh frame. |
+| Blocking-pool cap | 16 threads | Bounds the runtime's thread count (FR-CO01-001); DNS, key decryption and log flush are short. |
+| Event buffer per subscriber | 1024 events; a slower subscriber gets `Lagged` and re-reads `list()` | |
+| Channel-end grace | 500 ms to see whether a shell that ended without an exit status was a dropped connection | |
+| Quit budget | 2 s for closing sessions and flushing the connection log | FR-CO01-010. |
+| Idle-compaction quiet period | 60 s, a setting (`RuntimeConfig::idle_compaction_quiet_period`) | **Provisional** [TO CONFIRM · CHỜ XÁC NHẬN] (owner: Tech lead); approved as a provisional default by the project owner on 2026-11-25 pending the Tech lead's decision. |
