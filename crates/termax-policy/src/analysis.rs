@@ -652,6 +652,7 @@ mod tests {
         a.commands.iter().map(SimpleCommand::name).collect()
     }
 
+    /// Verifies: FR-AG03-002 specified behaviour
     #[test]
     fn recurses_into_lists_pipelines_and_substitutions() {
         let a = analyze("echo hi && $(rm -rf /) | grep x; (cat f) || `ls`");
@@ -663,6 +664,7 @@ mod tests {
         assert_eq!(rm.joined_args(), "-rf /");
     }
 
+    /// Verifies: FR-AG03-002 specified behaviour
     #[test]
     fn strips_wrappers_and_reparses_shell_scripts() {
         let a = analyze("sudo -u root bash -c 'mkfs.ext4 /dev/sda1'");

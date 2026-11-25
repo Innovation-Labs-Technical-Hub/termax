@@ -1,6 +1,6 @@
 ---
 title: "Phase 2: Traceability and Quality Tooling"
-status: todo
+status: completed
 priority: P1
 effort: "1–2 person-weeks"
 dependencies: []
@@ -16,9 +16,9 @@ Owner: Tech lead · Priority: P1 · Effort: 1–2 person-weeks · Depends on: no
 
 ## Requirements
 
-- [ ] `.principles/testing-and-performance.md` rule 2 (scenarios become tests)
-- [ ] `.principles/rust.md` planned lints (`unwrap_used`, `expect_used`, `print_stdout`)
-- [ ] Perf harness: memory after idle compaction (task 4.2 of `add-session-runtime`)
+- [x] `.principles/testing-and-performance.md` rule 2 (scenarios become tests)
+- [x] `.principles/rust.md` planned lints (`unwrap_used`, `expect_used`, `print_stdout`)
+- [x] Perf harness: memory after idle compaction (task 4.2 of `add-session-runtime`)
 
 ## Implementation Steps
 
@@ -31,12 +31,12 @@ Owner: Tech lead · Priority: P1 · Effort: 1–2 person-weeks · Depends on: no
 
 ## Todo
 
-- [ ] Tagging convention documented in `openspec/AGENTS.md`
-- [ ] `xtask spec-coverage` with unit tests
-- [ ] Existing tests tagged
-- [ ] CI coverage report job
-- [ ] Library `unwrap`/`expect` audit and lints enabled
-- [ ] Idle-compaction memory metric added and gated
+- [x] Tagging convention documented in `openspec/AGENTS.md`
+- [x] `xtask spec-coverage` with unit tests
+- [x] Existing tests tagged
+- [x] CI coverage report job
+- [x] Library `unwrap`/`expect` audit and lints enabled
+- [x] Idle-compaction memory metric added and gated
 
 ## Success Criteria
 

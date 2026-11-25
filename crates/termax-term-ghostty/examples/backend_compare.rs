@@ -8,6 +8,12 @@
 //! Run one backend per process so freed memory from one cannot hide the
 //! other's RSS growth.
 
+#![allow(
+    clippy::expect_used,
+    clippy::print_stdout,
+    reason = "a measurement example: prints its results and fails loudly"
+)]
+
 use std::time::{Duration, Instant};
 
 use termax_term::{AlacrittyTerm, Budget, Frame, GridSize, TermConfig, TermCore};

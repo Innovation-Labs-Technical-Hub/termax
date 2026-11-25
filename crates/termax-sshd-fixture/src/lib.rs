@@ -1,6 +1,12 @@
 //! A throwaway OpenSSH sshd running as the current user on 127.0.0.1, for
 //! integration tests and the perf harness. Never used by shipping code.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test support: a fixture that cannot start must fail the test loudly"
+)]
+
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};

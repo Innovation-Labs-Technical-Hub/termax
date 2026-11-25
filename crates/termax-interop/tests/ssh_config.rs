@@ -1,3 +1,9 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test helpers outside #[test] functions; a panic is a test failure"
+)]
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -34,6 +40,7 @@ fn find<'a>(hosts: &'a [Host], label: &str) -> &'a Host {
         .unwrap_or_else(|| panic!("host {label} not imported"))
 }
 
+/// Verifies: FR-CO11-002 specified behaviour
 #[test]
 fn include_glob_skips_hidden_and_non_matching_files() {
     let cfg = fixture_config();
@@ -50,6 +57,7 @@ fn include_glob_skips_hidden_and_non_matching_files() {
     assert!(!labels.iter().any(|l| l == "hidden" || l == "not-a-conf"));
 }
 
+/// Verifies: FR-CO11-002 specified behaviour
 #[test]
 fn include_cycles_are_reported_not_followed() {
     let cfg = fixture_config();
@@ -76,6 +84,7 @@ fn include_inside_host_block_is_gated_by_that_block() {
     assert_eq!(nested.port(), Some(22));
 }
 
+/// Verifies: FR-CO11-002 specified behaviour
 #[test]
 fn include_depth_is_limited() {
     let dir = tempfile::tempdir().unwrap();
@@ -106,6 +115,7 @@ fn parse_str_resolves_includes_against_injected_ssh_dir() {
     assert_eq!(cfg.resolve("work").hostname(), "work.corp");
 }
 
+/// Verifies: FR-CO11-002 specified behaviour
 #[test]
 fn match_host_uses_hostname_and_exec_is_never_run() {
     let cfg = fixture_config();
@@ -126,6 +136,7 @@ fn match_host_uses_hostname_and_exec_is_never_run() {
     assert_eq!(cfg.resolve("db").get("compression"), Some("yes"));
 }
 
+/// Verifies: FR-CO11-002 specified behaviour
 #[test]
 fn resolve_matches_ssh_g_semantics() {
     let cfg = fixture_config();
@@ -171,6 +182,7 @@ fn resolve_matches_ssh_g_semantics() {
     assert_eq!(unknown.port(), Some(22));
 }
 
+/// Verifies: FR-CO11-002 specified behaviour
 #[test]
 fn negated_patterns_exclude_hosts() {
     let cfg = fixture_config();
@@ -209,6 +221,7 @@ fn keyword_case_equals_syntax_and_quotes() {
     );
 }
 
+/// Verifies: FR-CO11-002 specified behaviour
 #[test]
 fn token_expansion() {
     let cfg = SshConfig::parse_str(
@@ -239,6 +252,7 @@ fn token_expansion() {
     assert!(r.warnings[0].message.contains("%C"));
 }
 
+/// Verifies: FR-CO11-002 specified behaviour
 #[test]
 fn import_maps_hosts_and_reports_skips() {
     let cfg = fixture_config();
@@ -363,6 +377,8 @@ fn comparable(hosts: &[Host]) -> Vec<Comparable> {
         .collect()
 }
 
+/// Verifies: FR-CO11-008 specified behaviour
+/// Verifies: FR-CO11-008 acceptance 2
 #[test]
 fn export_round_trips_through_the_parser() {
     let imported = fixture_config().import(VaultId::new()).hosts;
@@ -378,6 +394,7 @@ fn export_round_trips_through_the_parser() {
     assert_eq!(comparable(&report.hosts), comparable(&imported), "{text}");
 }
 
+/// Verifies: FR-CO11-008 acceptance 2
 #[test]
 fn export_round_trips_hand_built_hosts() {
     let vault = VaultId::new();

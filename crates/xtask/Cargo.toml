@@ -17,6 +17,13 @@ clap = { version = "4", features = ["derive"] }
 memory-stats = "1"
 serde.workspace = true
 serde_json = "1"
+# Source scanning for `cargo xtask spec-coverage`; span-locations gives line
+# numbers outside proc macros.
+syn = { version = "2", default-features = false, features = ["full", "parsing", "printing", "visit"] }
+proc-macro2 = { version = "1", default-features = false, features = ["span-locations"] }
+
+[dev-dependencies]
+tempfile.workspace = true
 
 # Ghostty's Zig build currently works on Linux only (Zig 0.15.2 cannot link
 # against the macOS 26 SDK or compile with Visual Studio 2026's C++ library).

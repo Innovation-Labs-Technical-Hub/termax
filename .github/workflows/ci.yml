@@ -51,6 +51,30 @@ jobs:
         with:
           node-version: 24
       - run: npx --yes @fission-ai/openspec@1.17.0 validate --all --strict
+  coverage:
+    # Which OpenSpec scenarios are linked to tests (`/// Verifies:` tags) and
+    # pass. Report only: the percentage is not gated yet, but tags that point
+    # at an unknown requirement or scenario, or at no test, fail the job.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+      - name: Prepare sshd for interop tests
+        run: |
+          [ -x /usr/sbin/sshd ] || { sudo apt-get update && sudo apt-get install -y openssh-server; }
+          sudo mkdir -p /run/sshd
+      - run: cargo xtask spec-coverage --run --json spec-coverage.json
+      - run: cargo xtask spec-coverage --phase P1 --run --json spec-coverage-p1.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: spec-coverage
+          path: spec-coverage*.json
+          if-no-files-found: ignore
   deny:
     runs-on: ubuntu-24.04
     steps:

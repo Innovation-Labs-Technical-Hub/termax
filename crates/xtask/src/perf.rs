@@ -110,12 +110,20 @@ pub fn run(opts: &Options) -> Result<bool> {
         );
     }
 
-    for (label, lines, target) in [
-        ("empty history", 0, None),
-        ("1k lines", 1_000, None),
-        ("10k lines", 10_000, Some(TARGET_TAB_MIB)),
+    for (label, lines, idle, target) in [
+        ("empty history", 0, false, None),
+        ("1k lines", 1_000, false, None),
+        ("10k lines", 10_000, false, Some(TARGET_TAB_MIB)),
+        // What a background tab costs once the session has gone quiet and
+        // the backend compacted its scrollback.
+        (
+            "10k lines (after idle compaction)",
+            10_000,
+            true,
+            Some(TARGET_TAB_MIB),
+        ),
     ] {
-        let (rss_mib, estimate_mib) = memory_per_tab(make, opts.tabs, lines)?;
+        let (rss_mib, estimate_mib) = memory_per_tab(make, opts.tabs, lines, idle)?;
         // RSS includes allocator reuse and varies run to run, so it is
         // reported (and held to the target) but only the core's own
         // estimate, which is deterministic, is gated.
@@ -335,8 +343,10 @@ fn median_ms(samples: &mut [Duration]) -> f64 {
 }
 
 /// Average extra memory per 80×24 terminal holding `lines` lines of ASCII
-/// history plus a screenful of prompt output.
-fn memory_per_tab(make: Factory, tabs: usize, lines: usize) -> Result<(f64, f64)> {
+/// history plus a screenful of prompt output. With `idle`, each terminal
+/// gets its idle callback (`TermCore::on_idle`) before memory is measured,
+/// as the session's parser task does once output has been quiet.
+fn memory_per_tab(make: Factory, tabs: usize, lines: usize, idle: bool) -> Result<(f64, f64)> {
     let tabs = tabs.max(1);
     let mut history = Vec::new();
     for i in 0..lines.max(1) {
@@ -355,6 +365,9 @@ fn memory_per_tab(make: Factory, tabs: usize, lines: usize) -> Result<(f64, f64)
         term.feed(&history, Budget::UNLIMITED);
         let mut frame = Frame::default();
         term.snapshot(&mut frame);
+        if idle {
+            term.on_idle();
+        }
         terms.push((term, frame));
     }
     let after = rss()?;

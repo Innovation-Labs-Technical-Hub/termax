@@ -179,6 +179,10 @@ impl GhosttyTerm {
     ///
     /// Only if Ghostty cannot allocate the terminal; use [`Self::try_new`] to
     /// handle that.
+    #[allow(
+        clippy::expect_used,
+        reason = "documented panic on allocation failure, like `Box::new`; `try_new` is the fallible form"
+    )]
     pub fn new(config: TermConfig) -> Self {
         Self::try_new(config).expect("libghostty-vt failed to allocate a terminal")
     }

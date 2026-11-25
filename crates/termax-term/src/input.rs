@@ -559,6 +559,7 @@ mod tests {
         assert_eq!(key(&normal, Key::End, Modifiers::NONE), b"\x1b[F");
     }
 
+    /// Verifies: FR-CO04-005 acceptance 1
     #[test]
     fn modifiers_use_csi_1_m() {
         let m = InputModes {

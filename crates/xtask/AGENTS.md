@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`xtask` holds the Termax developer tasks that are better written in Rust than in the justfile. `cargo xtask perf` measures the terminal core (parser throughput, snapshot cost, echo latency under flood, memory per tab) and the SSH layer against a local sshd. It compares the results with the performance targets and fails on regressions against a baseline run, so CI can gate on it. `cargo xtask sshd` runs the test fixture's throwaway sshd in the foreground for manual use. The crate is `publish = false` and is never shipped.
+`xtask` holds the Termax developer tasks that are better written in Rust than in the justfile. `cargo xtask perf` measures the terminal core (parser throughput, snapshot cost, echo latency under flood, memory per tab, also after idle scrollback compaction) and the SSH layer against a local sshd. It compares the results with the performance targets and fails on regressions against a baseline run, so CI can gate on it. `cargo xtask sshd` runs the test fixture's throwaway sshd in the foreground for manual use. `cargo xtask spec-coverage` reports which OpenSpec acceptance scenarios are linked to tests. The crate is `publish = false` and is never shipped.
 
 ## Public API entry points
 
@@ -10,16 +10,18 @@ This is a binary crate. The `cargo xtask` alias in `.cargo/config.toml` runs it 
 
 - `cargo xtask perf [--backend ghostty|alacritty] [--check] [--baseline FILE] [--tolerance F] [--json FILE] [--mib N] [--tabs N] [--no-ssh]`. The default backend is `ghostty` on Linux and `alacritty` elsewhere. The default tolerance is 0.10 (10 %).
 - `cargo xtask sshd`.
+- `cargo xtask spec-coverage [--phase P1|P2|P3] [--run] [--json FILE]`. It counts OpenSpec scenarios linked to tests by `/// Verifies:` tags. With `--run` it also runs the tagged tests and counts the passing ones. Dangling tags exit with 1. The convention is in `openspec/AGENTS.md`.
 
 ## Commands
 
-- `cargo test -p xtask` (unit tests for the metric and regression logic).
+- `cargo test -p xtask` (unit tests for the metric and regression logic and the spec-coverage parser and matcher).
 - `cargo clippy -p xtask --all-targets -- -D warnings`.
 - `just perf --no-ssh` and `just perf --backend alacritty` wrap `cargo xtask perf`.
 - `just perf-baseline` saves `target/perf/baseline.json`. `just perf-compare` checks against it and fails on regressions over 10 %.
 - `just compare-backends` (Linux) writes Ghostty and alacritty results side by side.
 - `cargo xtask perf --no-ssh --mib 1 --tabs 2` is a quick smoke run. The defaults (64 MiB per workload, 20 tabs, SSH included) take much longer.
 - `just sshd` (the same as `cargo xtask sshd`). Stop it with Ctrl-C.
+- `just spec-coverage --phase P1` (static), or add `--run` to build and run the tagged tests (the CI `coverage` job does).
 
 ## Layout
 
@@ -27,6 +29,7 @@ This is a binary crate. The `cargo xtask` alias in `.cargo/config.toml` runs it 
 - `src/perf.rs`: terminal-core measurements, generic over a `TermCore` factory. `src/workloads.rs`: deterministic byte streams that stand in for real traffic.
 - `src/ssh_perf.rs`: SSH measurements against `termax-sshd-fixture`, compared with the stock OpenSSH client where that makes sense.
 - `src/metric.rs`: the `Metric` type, targets, gated and ungated metrics, and baseline comparison. `src/sshd.rs`: the foreground sshd command.
+- `src/spec_coverage/`: `specs.rs` parses `openspec/specs/*/spec.md`, `tags.rs` finds `Verifies:` tags with `syn` and resolves each test's target and libtest name, `runner.rs` runs tagged tests per cargo target (`cargo test -p P --lib|--test T -- --exact …`) and parses the stable libtest output, and `mod.rs` matches tags to scenarios and prints the report and JSON.
 
 ## Conventions
 

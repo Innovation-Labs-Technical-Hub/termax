@@ -47,6 +47,7 @@ fn mkfs_behind_sudo_bash_c_is_denied() {
     assert!(reason.contains("mkfs.ext4"), "{reason}");
 }
 
+/// Verifies: FR-AG03-003 specified behaviour
 #[test]
 fn user_allow_rule_cannot_relax_builtin_denies() {
     for cmd in [
@@ -94,6 +95,7 @@ fn builtin_denies_have_no_false_positives_on_safe_paths() {
     }
 }
 
+/// Verifies: FR-AG03-003 specified behaviour
 #[test]
 fn power_commands_ask_even_when_allowed() {
     for cmd in [
@@ -118,6 +120,7 @@ fn run_time_values_fail_closed_to_ask() {
     }
 }
 
+/// Verifies: FR-AG03-002 specified behaviour
 #[test]
 fn parse_errors_fail_closed() {
     for cmd in ["echo 'unterminated", "if then fi", "echo $(", "ls )"] {
@@ -152,6 +155,7 @@ fn req<'a>(actor: &'a Actor, command: &'a str, env: Env, tags: &'a [String]) -> 
     }
 }
 
+/// Verifies: FR-AG03-001 acceptance 1
 #[test]
 fn prod_env_or_tag_downgrades_allow_to_ask() {
     let (e, _) = engine(allow_ls());
