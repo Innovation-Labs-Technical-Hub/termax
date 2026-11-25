@@ -28,7 +28,7 @@ Owner: Tech lead · Priority: P1 · Effort: 5–6 person-weeks · Depends on: ph
 ## Todo
 
 - [ ] `add-session-runtime` tasks 1.1–5.2 done (2026-11-25, branch `feat/session-runtime`: 11/14 verified; open: 1.1 awaits CI on macOS/Windows and `cargo deny`, 5.1 awaits the Tech lead's quiet-period decision (provisional 60 s), 5.2 awaits archive after merge)
-- [ ] `add-control-endpoint` proposed, validated, implemented
+- [ ] `add-control-endpoint` proposed, validated, implemented (2026-11-25, branch `feat/control-endpoint` stacked on `feat/session-runtime`: 12/14 tasks verified; new crate `termax-control`, `tmx headless|pair|sessions`; P1 spec coverage 39 → 46 scenarios, CO-01 15 → 21 of 31; open: 2.1 awaits Windows/macOS CI, 4.2 awaits CI `cargo deny`; [TO CONFIRM · CHỜ XÁC NHẬN] scope model and headless pairing approval)
 - [x] Echo-under-flood metric through `termax-session` gated in CI ("echo under flood p50/p99 via termax-session", gated like the other flood metrics; first base comparison happens on the PR after this one)
 - [ ] Changes archived
 

@@ -6,7 +6,7 @@
 
 ## Public API entry points
 
-- `Session::connect(&ConnectOptions, &ConnectContext)` (or `Session::connect_stream` over a TCP stream the caller connected, for its own DNS and Happy Eyeballs), and on the cloneable `Session` handle: `exec`, `open_shell`, `forward_local`, `negotiated`, `state`, `subscribe`, `closed` and `disconnect`.
+- `Session::connect(&ConnectOptions, &ConnectContext)` (or `Session::connect_stream` over a TCP stream the caller connected, for its own DNS and Happy Eyeballs), and on the cloneable `Session` handle: `exec`, `open_shell`, `forward_local`, `negotiated`, `state`, `subscribe`, `closed`, `ping` (keepalive with want-reply, for network-change probes) and `disconnect`.
 - `ConnectOptions` (with secure `Default`), `JumpHop`, `AuthMethod`, `CryptoPolicy`, `PtyRequest`, and the `DEFAULT_*`, `MIN_WINDOW_SIZE`, `MIN_PACKET_SIZE` and `MAX_PACKET_SIZE` constants.
 - Trust: `HostKeyVerifier` (`MemoryVerifier`, `VaultVerifier`), `TrustDecision` (`FixedTrust`), `TrustChoice`, `HostKeyStatus`, `HostKeyInfo`, `host_port`.
 - Prompts: `Prompter`, `NoPrompter`, `KbdInteractiveRequest`, `KbdPrompt`.

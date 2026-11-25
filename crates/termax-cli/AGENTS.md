@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`termax-cli` builds `tmx`, the Termax command-line tool. It shares the encrypted local vault with the desktop app. Today it can create and inspect a vault, import hosts and host keys from OpenSSH files, list hosts and export them as ssh_config, and dry-run the agent approval policy. It is thin glue: parsing and conversion live in `termax-interop`, storage and crypto in `termax-vault`, and policy in `termax-policy`. Keep business logic out of this crate.
+`termax-cli` builds `tmx`, the Termax command-line tool. It shares the encrypted local vault with the desktop app. Today it can create and inspect a vault, import hosts and host keys from OpenSSH files, list hosts and export them as ssh_config, dry-run the agent approval policy, run a headless runtime, pair with a runtime and list or open its sessions over the local control endpoint. It is thin glue: parsing and conversion live in `termax-interop`, storage and crypto in `termax-vault`, policy in `termax-policy`, and the endpoint, pairing and headless runner in `termax-control`. Keep business logic out of this crate.
 
 ## Public API entry points
 
@@ -12,7 +12,10 @@ This is a binary crate (`[[bin]] name = "tmx"`, `src/main.rs`). Its interface is
 - `tmx import ssh-config [PATH] [--dry-run]` and `tmx import known-hosts [PATH] [--dry-run]`.
 - `tmx hosts list [--search TEXT] [--tag TAG] [--env ENV]` and `tmx hosts export`.
 - `tmx policy check [--env none|dev|staging|prod] [--tag T] [--rules FILE] [--external ID [--operate]] <COMMAND>`. It exits 0 for allow, 2 for ask and 3 for deny.
-- Global flags: `--db PATH` (or `TMX_VAULT_PATH`) and `--json`. Credentials come from `TMX_VAULT_PASSWORD` and `TMX_SECRET_KEY`, or from interactive prompts.
+- `tmx headless [--idle-timeout SECS]` (default 300): runtime + endpoint without a UI, using the vault for hosts and known hosts; asks pairing and operate approvals on its terminal (denies without one); exits when idle or on Ctrl-C and removes its socket.
+- `tmx pair [--operate]`: request pairing (observe, plus operate with the flag); the token goes to the OS keychain under `tmx@<endpoint>`.
+- `tmx sessions list` (also `tmx ls`) and `tmx sessions open <HOST> [--cols N --rows N]`. Auth errors print `TMX-CTL-401` and a hint to run `tmx pair`; no runtime prints a hint to start one.
+- Global flags: `--db PATH` (or `TMX_VAULT_PATH`), `--endpoint DIR` (or `TMX_ENDPOINT`, the control endpoint directory) and `--json`. Credentials come from `TMX_VAULT_PASSWORD` and `TMX_SECRET_KEY`, or from interactive prompts.
 
 `cargo run -q -p termax-cli -- <subcommand> --help` is the authoritative flag reference.
 
@@ -27,8 +30,8 @@ This is a binary crate (`[[bin]] name = "tmx"`, `src/main.rs`). Its interface is
 
 - `src/main.rs`: the clap tree, the shared `Ctx` (`db`, `json`), `print_json`, and error-to-exit-code mapping (errors exit 1).
 - `src/vault_cmd.rs`: database path resolution, credential prompts, `open_store`, and `default_vault` (the first personal vault).
-- `src/import_cmd.rs`, `src/hosts_cmd.rs`, `src/policy_cmd.rs`: one subcommand group each.
-- `tests/cli.rs`: end-to-end runs of the built `tmx` binary with a temporary home and database.
+- `src/import_cmd.rs`, `src/hosts_cmd.rs`, `src/policy_cmd.rs`: one subcommand group each. `src/control_cmd.rs`: `headless`, `pair`, `sessions`/`ls` and the terminal approval prompt.
+- `tests/cli.rs`: end-to-end runs of the built `tmx` binary with a temporary home and database, including a `tmx headless` lifecycle test (private socket, unpaired refusal, denied pairing without a terminal, single instance, idle exit).
 
 ## Conventions
 
@@ -45,7 +48,8 @@ This is a binary crate (`[[bin]] name = "tmx"`, `src/main.rs`). Its interface is
 
 ## OpenSpec
 
-- `automation-logging-cli`, module PL-04 (`FR-PL04-*`): FR-PL04-001 (command tree and global flags), FR-PL04-002 (shared vault), FR-PL04-005 (`tmx vault`), FR-PL04-006 (`tmx import`), and FR-PL04-009 (JSON output and exit codes). `tmx ssh`, `sftp`, `mcp`, `log` and session attach are not implemented yet.
+- `automation-logging-cli`, module PL-04 (`FR-PL04-*`): FR-PL04-001 (command tree and global flags), FR-PL04-002 (shared vault), FR-PL04-005 (`tmx vault`), FR-PL04-006 (`tmx import`), FR-PL04-009 (JSON output and exit codes), and part of FR-PL04-012 (pairing; client list and revocation UI pending). `tmx ssh`, `sftp`, `mcp`, `log`, `attach` and `send` are not implemented yet, and no command auto-starts a headless runtime.
+- `connectivity`, module CO-01: FR-CO01-007 headless mode (`tmx headless`).
 
 ## See also
 
