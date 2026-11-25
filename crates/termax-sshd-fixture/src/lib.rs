@@ -14,6 +14,9 @@ use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+mod proxy;
+
+pub use proxy::NetProxy;
 use tempfile::TempDir;
 use termax_ssh::{
     AuthMethod, ConnectContext, ConnectOptions, FixedTrust, HostKeyVerifier, MemoryVerifier,
@@ -83,18 +86,34 @@ pub fn free_port() -> u16 {
         .port()
 }
 
+/// Extra sshd settings for a test.
+#[derive(Debug, Clone, Default)]
+pub struct SshdOptions {
+    /// `MaxSessions`: open session channels allowed per connection.
+    pub max_sessions: Option<u32>,
+    /// `ForceCommand`, e.g. `exec /bin/sh` so interactive tests do not
+    /// depend on the developer's login shell and its rc files.
+    pub force_command: Option<String>,
+}
+
 pub struct Sshd {
     pub dir: TempDir,
     pub port: u16,
     pub user: String,
     /// Authorized client key (no passphrase).
     pub client_key: PathBuf,
+    options: SshdOptions,
     child: Option<Child>,
 }
 
 impl Sshd {
     /// Start sshd, or `None` (after printing a skip message) if it is missing.
     pub fn start() -> Option<Sshd> {
+        Self::start_with(SshdOptions::default())
+    }
+
+    /// [`Sshd::start`] with extra settings.
+    pub fn start_with(options: SshdOptions) -> Option<Sshd> {
         if !Path::new(SSHD).exists() || !have("ssh-keygen") {
             eprintln!("SKIP: {SSHD} or ssh-keygen not available");
             return None;
@@ -114,6 +133,7 @@ impl Sshd {
             port: 0,
             user: current_user(),
             client_key,
+            options,
             child: None,
         };
         s.spawn_with_retries();
@@ -155,6 +175,12 @@ impl Sshd {
         if openssh_version().is_some_and(|v| v >= (9, 8)) {
             cfg.push_str("PerSourcePenalties no\n");
         }
+        if let Some(n) = self.options.max_sessions {
+            cfg.push_str(&format!("MaxSessions {n}\n"));
+        }
+        if let Some(c) = &self.options.force_command {
+            cfg.push_str(&format!("ForceCommand {c}\n"));
+        }
         let path = self.dir.path().join("sshd_config");
         std::fs::write(&path, cfg).expect("sshd_config");
         path
@@ -187,6 +213,11 @@ impl Sshd {
 
     fn log_path(&self) -> PathBuf {
         self.dir.path().join("sshd.log")
+    }
+
+    /// The sshd log so far (`LogLevel VERBOSE`, all connections).
+    pub fn log(&self) -> String {
+        std::fs::read_to_string(self.log_path()).unwrap_or_default()
     }
 
     fn try_spawn(&mut self) -> bool {

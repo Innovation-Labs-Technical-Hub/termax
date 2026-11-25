@@ -175,6 +175,27 @@ impl Session {
     /// each hop is reached through a `direct-tcpip` channel of the previous
     /// one and has its host key verified independently.
     pub async fn connect(opts: &ConnectOptions, ctx: &ConnectContext) -> Result<Session> {
+        Self::connect_inner(opts, ctx, None).await
+    }
+
+    /// Like [`Session::connect`], but the first hop (the first jump host, or
+    /// the target when there are none) runs over `tcp`, a stream the caller
+    /// already connected to it. Callers use this to do their own name
+    /// resolution and address racing (Happy Eyeballs). Host keys are still
+    /// verified under the `host:port` in the options, not the peer address.
+    pub async fn connect_stream(
+        opts: &ConnectOptions,
+        ctx: &ConnectContext,
+        tcp: TcpStream,
+    ) -> Result<Session> {
+        Self::connect_inner(opts, ctx, Some(tcp)).await
+    }
+
+    async fn connect_inner(
+        opts: &ConnectOptions,
+        ctx: &ConnectContext,
+        mut first_stream: Option<TcpStream>,
+    ) -> Result<Session> {
         opts.validate()?;
         let config = Arc::new(russh::client::Config {
             preferred: opts.crypto.to_preferred()?,
@@ -207,7 +228,15 @@ impl Session {
         for hop in hops {
             let clock = Arc::new(PromptClock::default());
             let target = host_port(hop.host, hop.port);
-            let fut = connect_hop(&config, &hop, via.take(), ctx, Arc::clone(&clock), opts);
+            let fut = connect_hop(
+                &config,
+                &hop,
+                via.take(),
+                first_stream.take(),
+                ctx,
+                Arc::clone(&clock),
+                opts,
+            );
             let s = clock.run("connect", opts.connect_timeout, fut).await?;
             info!(
                 target = %target,
@@ -306,10 +335,7 @@ impl Session {
     fn channel_error(&self, e: russh::Error) -> Error {
         match self.state() {
             ConnectionState::Closed(r) => Error::Closed(r),
-            ConnectionState::Connected => match e {
-                russh::Error::ChannelOpenFailure(f) => Error::ChannelOpen(format!("{f:?}")),
-                other => Error::from(other),
-            },
+            ConnectionState::Connected => Error::from(e),
         }
     }
 
@@ -385,6 +411,7 @@ async fn connect_hop(
     config: &Arc<russh::client::Config>,
     hop: &Hop<'_>,
     via: Option<Session>,
+    stream: Option<TcpStream>,
     ctx: &ConnectContext,
     clock: Arc<PromptClock>,
     opts: &ConnectOptions,
@@ -406,9 +433,12 @@ async fn connect_hop(
 
     let mut handle = match &via {
         None => {
-            let tcp = TcpStream::connect((hop.host, hop.port))
-                .await
-                .map_err(|e| connect_err(e.to_string()))?;
+            let tcp = match stream {
+                Some(tcp) => tcp,
+                None => TcpStream::connect((hop.host, hop.port))
+                    .await
+                    .map_err(|e| connect_err(e.to_string()))?,
+            };
             if let Err(e) = tcp.set_nodelay(true) {
                 debug!(error = %e, "set_nodelay failed");
             }
